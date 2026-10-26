@@ -1,0 +1,41 @@
+{
+  "_about": "crypto-trader-skill settings. Copy to crypto/config.json (python3 crypto-setup/setup.py init) and edit. Keys starting with _ are notes.",
+
+  "_data": "Where prices come from. auto tries Binance, then Bybit, then Hyperliquid, and keeps the first that answers from your location.",
+  "venue": "auto",
+  "display_tz": "UTC",
+  "session": "utc",
+  "min_quote_volume_usd": 20000000,
+  "min_listing_days": 14,
+  "max_symbols": 150,
+  "exclude": [],
+
+  "_money": "Your account and your limits. Every order passes crypto-risk against these before it can go anywhere.",
+  "account_usd": 1000,
+  "max_loss_per_trade_usd": 10,
+  "max_daily_loss_usd": 30,
+  "max_trades_per_day": 4,
+  "max_open_positions": 2,
+  "min_reward_risk": 1.5,
+  "require_stop": true,
+  "max_hold_hours": 24,
+  "cooldown_after_losses": 2,
+  "cooldown_hours": 12,
+  "blocked": [],
+
+  "_leverage": "Leverage and margin. Isolated margin limits a loss to the margin you put up for that one position.",
+  "max_leverage": 3,
+  "margin_mode": "isolated",
+  "allow_cross_margin": false,
+  "allow_short": true,
+  "min_liq_buffer": 2.0,
+
+  "_costs": "Fees in basis points (0.01%). Leave null to use the venue's base rate.",
+  "taker_fee_bps": null,
+  "maker_fee_bps": null,
+  "slippage_bps": 3.0,
+
+  "_orders": "paper true simulates fills at live prices against the real order book. Live orders need paper false, your own keys in environment variables, a PASS from crypto-risk and your typed yes.",
+  "paper": true,
+  "live_venue": "binance"
+}

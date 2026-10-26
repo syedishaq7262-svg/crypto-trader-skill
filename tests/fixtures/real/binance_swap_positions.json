@@ -1,0 +1,29 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/binance.json",
+ "method": "fetchPositions",
+ "description": "Fetch linear positions with symbols",
+ "response": [
+  {
+   "symbol": "BTCUSDT",
+   "positionSide": "BOTH",
+   "positionAmt": "0.009",
+   "entryPrice": "67445.9",
+   "breakEvenPrice": "67479.62295",
+   "markPrice": "67582.20000000",
+   "unRealizedProfit": "1.22670000",
+   "liquidationPrice": "64846.78939917",
+   "isolatedMargin": "0",
+   "notional": "608.23980000",
+   "marginAsset": "USDT",
+   "isolatedWallet": "0",
+   "initialMargin": "7.60299749",
+   "maintMargin": "2.43295920",
+   "positionInitialMargin": "7.60299749",
+   "openOrderInitialMargin": "0",
+   "adl": "2",
+   "bidNotional": "0",
+   "askNotional": "0",
+   "updateTime": "1722161166529"
+  }
+ ]
+}

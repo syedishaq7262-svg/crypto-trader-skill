@@ -1,0 +1,44 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/bybit.json",
+ "method": "fetchOHLCV",
+ "description": "swap ohlcv with since and limit",
+ "response": {
+  "retCode": "0",
+  "retMsg": "OK",
+  "result": {
+   "symbol": "BTCUSDT",
+   "category": "linear",
+   "list": [
+    [
+     "1706637600000",
+     "43376.1",
+     "43474.1",
+     "43264.8",
+     "43352.8",
+     "1575.305",
+     "68345898.1407"
+    ],
+    [
+     "1706634000000",
+     "43488",
+     "43579.5",
+     "43286.8",
+     "43376.1",
+     "3199.431",
+     "138878389.2519"
+    ],
+    [
+     "1706630400000",
+     "43350.7",
+     "43492.5",
+     "43204.5",
+     "43488",
+     "1341.261",
+     "58117391.4117"
+    ]
+   ]
+  },
+  "retExtInfo": {},
+  "time": "1706803708087"
+ }
+}

@@ -1,0 +1,42 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/bybit.json",
+ "method": "fetchTicker",
+ "description": "swap ticker",
+ "response": {
+  "retCode": "0",
+  "retMsg": "OK",
+  "result": {
+   "category": "linear",
+   "list": [
+    {
+     "symbol": "BTCUSDT",
+     "lastPrice": "51444.40",
+     "indexPrice": "51469.95",
+     "markPrice": "51444.40",
+     "prevPrice24h": "50147.50",
+     "price24hPcnt": "0.025861",
+     "highPrice24h": "51444.40",
+     "lowPrice24h": "48381.60",
+     "prevPrice1h": "50999.90",
+     "openInterest": "225766.793",
+     "openInterestValue": "11614437205.81",
+     "turnover24h": "2352063794.0035",
+     "volume24h": "47293.8870",
+     "fundingRate": "-0.00046295",
+     "nextFundingTime": "1707926400000",
+     "predictedDeliveryPrice": "",
+     "basisRate": "",
+     "deliveryFeeRate": "",
+     "deliveryTime": "0",
+     "ask1Size": "491.691",
+     "bid1Price": "51444.30",
+     "ask1Price": "51444.40",
+     "bid1Size": "55.841",
+     "basis": ""
+    }
+   ]
+  },
+  "retExtInfo": {},
+  "time": "1707905549267"
+ }
+}

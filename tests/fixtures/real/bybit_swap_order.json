@@ -1,0 +1,15 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/bybit.json",
+ "method": "createOrder",
+ "description": "swap limit sell takeProfitPrice",
+ "response": {
+  "retCode": "0",
+  "retMsg": "OK",
+  "result": {
+   "orderId": "8bec532a-36b1-437e-93f4-1b03bf449456",
+   "orderLinkId": ""
+  },
+  "retExtInfo": {},
+  "time": "1764711613007"
+ }
+}

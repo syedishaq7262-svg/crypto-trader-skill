@@ -1,0 +1,22 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/bybit.json",
+ "method": "fetchOpenInterest",
+ "description": "linear OI",
+ "response": {
+  "retCode": 0,
+  "retMsg": "OK",
+  "result": {
+   "symbol": "BTCUSDT",
+   "category": "linear",
+   "list": [
+    {
+     "openInterest": "62129.45500000",
+     "timestamp": "1739725200000"
+    }
+   ],
+   "nextPageCursor": "lastid%3D10860016%26lasttime%3D1739725200"
+  },
+  "retExtInfo": {},
+  "time": 1739725954780
+ }
+}

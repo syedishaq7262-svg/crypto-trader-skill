@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+/crypto/
+*.tmp*
+.DS_Store

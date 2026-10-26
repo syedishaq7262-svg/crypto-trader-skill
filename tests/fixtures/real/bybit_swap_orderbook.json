@@ -1,0 +1,37 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/bybit.json",
+ "method": "fetchOrderBook",
+ "description": "swap orderbook",
+ "response": {
+  "retCode": "0",
+  "retMsg": "OK",
+  "result": {
+   "s": "BTCUSDT",
+   "b": [
+    [
+     "42544.7",
+     "172.404"
+    ],
+    [
+     "42544.5",
+     "88.856"
+    ]
+   ],
+   "a": [
+    [
+     "42548",
+     "108.998"
+    ],
+    [
+     "42548.2",
+     "75.008"
+    ]
+   ],
+   "ts": "1706803948569",
+   "u": "342690",
+   "seq": "429272667"
+  },
+  "retExtInfo": {},
+  "time": "1706803949068"
+ }
+}

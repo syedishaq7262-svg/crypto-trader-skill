@@ -1,0 +1,31 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/hyperliquid.json",
+ "method": "fetchOHLCV",
+ "description": "btc ohlcv",
+ "response": [
+  {
+   "T": "1710552419999",
+   "c": "69483.0",
+   "h": "69610.0",
+   "i": "1m",
+   "l": "69474.0",
+   "n": "67",
+   "o": "69584.0",
+   "s": "BTC",
+   "t": "1710552360000",
+   "v": "6.83271"
+  },
+  {
+   "T": "1710552479999",
+   "c": "69497.0",
+   "h": "69497.0",
+   "i": "1m",
+   "l": "69465.0",
+   "n": "26",
+   "o": "69471.0",
+   "s": "BTC",
+   "t": "1710552420000",
+   "v": "0.88301"
+  }
+ ]
+}

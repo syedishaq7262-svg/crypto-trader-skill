@@ -1,0 +1,29 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/binance.json",
+ "method": "createOrder",
+ "description": "Exchange rate underlying swap create order",
+ "response": {
+  "orderId": 1245734,
+  "symbol": "USDBRLUSDT",
+  "status": "NEW",
+  "clientOrderId": "x-cvBPrNm97965dacb36dd4b4a9735ac",
+  "price": "5.00000",
+  "origQty": "1.00",
+  "executedQty": "0.00",
+  "cumQty": "0.00",
+  "timeInForce": "GTC",
+  "type": "LIMIT",
+  "reduceOnly": false,
+  "closePosition": false,
+  "side": "BUY",
+  "positionSide": "BOTH",
+  "stopPrice": "0.00000",
+  "workingType": "CONTRACT_PRICE",
+  "priceProtect": false,
+  "origType": "LIMIT",
+  "priceMatch": "NONE",
+  "selfTradePreventionMode": "EXPIRE_MAKER",
+  "goodTillDate": 0,
+  "updateTime": 1790229582164
+ }
+}

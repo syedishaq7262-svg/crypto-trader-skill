@@ -1,0 +1,31 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/bybit.json",
+ "method": "fetchFundingRateHistory",
+ "description": "contract with a funding interval different from 8h",
+ "response": {
+  "retCode": "0",
+  "retMsg": "OK",
+  "result": {
+   "category": "linear",
+   "list": [
+    {
+     "symbol": "ZRXUSDT",
+     "fundingRate": "-0.00010131",
+     "fundingRateTimestamp": "1769540400000"
+    },
+    {
+     "symbol": "ZRXUSDT",
+     "fundingRate": "-0.00014161",
+     "fundingRateTimestamp": "1769536800000"
+    },
+    {
+     "symbol": "ZRXUSDT",
+     "fundingRate": "-0.00017947",
+     "fundingRateTimestamp": "1769533200000"
+    }
+   ]
+  },
+  "retExtInfo": {},
+  "time": "1769616369874"
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/binance.json",
+ "method": "fetchTickers",
+ "description": "rolling tickers",
+ "response": [
+  {
+   "symbol": "BTCUSDT",
+   "priceChange": "-306.15000000",
+   "priceChangePercent": "-0.258",
+   "weightedAvgPrice": "118352.05464480",
+   "openPrice": "118696.59000000",
+   "highPrice": "119273.36000000",
+   "lowPrice": "117427.50000000",
+   "lastPrice": "118390.44000000",
+   "volume": "14560.26477000",
+   "quoteVolume": "1723237251.70184720",
+   "openTime": "1753702740000",
+   "closeTime": "1753789176708",
+   "firstId": "5116055886",
+   "lastId": "5117987410",
+   "count": "1931525"
+  },
+  {
+   "symbol": "ETHUSDT",
+   "priceChange": "-51.30000000",
+   "priceChangePercent": "-1.325",
+   "weightedAvgPrice": "3809.98521582",
+   "openPrice": "3871.36000000",
+   "highPrice": "3889.99000000",
+   "lowPrice": "3731.21000000",
+   "lastPrice": "3820.06000000",
+   "volume": "604756.07960000",
+   "quoteVolume": "2304111722.45188600",
+   "openTime": "1753702740000",
+   "closeTime": "1753789176708",
+   "firstId": "2663611526",
+   "lastId": "2666831990",
+   "count": "3220465"
+  }
+ ]
+}

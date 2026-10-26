@@ -1,0 +1,76 @@
+"""crypto-coin: the card is complete, clean and honest on every venue."""
+
+import json
+import unittest
+
+from _load import cc, Session
+
+COIN = ("crypto-coin", "coin")
+
+
+class Card(unittest.TestCase):
+    def test_card_on_every_venue(self):
+        for venue in ("binance", "bybit", "hyperliquid"):
+            with Session() as s:
+                code, out, err = s.run(*COIN, ["SOL", "--venue", venue])
+                self.assertEqual(code, 0, venue + err)
+                for line in ("Price ", "Range ", "Trend ", "Momentum ", "Volatility ", "Levels ", "Liquidity ",
+                             "Funding ", "Open int. ", "Market ", "7 days ", "Setups now "):
+                    self.assertIn(line, out, venue)
+                self.assertIn("Context, not a call", out)
+                for word in ("buy now", "sell now", "bullish", "bearish", "will rise", "will fall"):
+                    self.assertNotIn(word, out.lower())
+
+    def test_json_has_what_the_planner_needs(self):
+        with Session() as s:
+            code, out, err = s.run(*COIN, ["orbx", "--venue", "binance", "--json"])
+            d = json.loads(out)
+            for k in ("price", "high_24h", "low_24h", "support", "resistance", "atr_1h_pct", "atr_1d_pct",
+                      "funding", "open_interest", "book", "trend", "rsi", "setups", "notes"):
+                self.assertIn(k, d)
+            self.assertTrue(any(h["setup"] == "orb" and h["side"] == "long" for h in d["setups"]))
+            self.assertTrue(all(x > d["price"] for x in d["resistance"]))
+            self.assertTrue(all(x < d["price"] for x in d["support"]))
+            self.assertIsNotNone(cc.read_json(s.path("coins", "ORBXUSDT.json")))
+
+    def test_priced_per_thousand_is_said_out_loud(self):
+        with Session() as s:
+            code, out, err = s.run(*COIN, ["bonk", "--venue", "hyperliquid"])
+            self.assertIn("kBONK", out)
+            self.assertIn("Priced per 1,000 coins", out)
+
+    def test_new_listing_and_crowding_notes(self):
+        with Session() as s:
+            code, out, err = s.run(*COIN, ["NEWX", "--venue", "binance"])
+            self.assertIn("Listed 3d", out)
+            code, out, err = s.run(*COIN, ["FUNDX", "--venue", "binance"])
+            self.assertIn("crowded longs", out)
+            self.assertIn("top 5% of the last 30 days", out)
+
+    def test_unknown_coin(self):
+        with Session() as s:
+            code, out, err = s.run(*COIN, ["doge2", "--venue", "binance"])
+            self.assertEqual(code, 1)
+            self.assertIn("Close matches: DOGE", err)
+
+    def test_a_missing_section_is_listed_never_invented(self):
+        with Session() as s:
+            v = cc.get_venue("binance")
+            orig = v.orderbook
+            mod = __import__("_load").load(*COIN)
+            def broken(*a, **k):
+                raise cc.NetError("could not reach fapi.binance.com: timed out")
+            v.orderbook = broken
+            d = mod.build(v, "SOL", cc.load_config())
+            self.assertIn("book", d["errors"])
+            self.assertNotIn("book", d)
+
+    def test_btc_card_has_no_btc_comparison(self):
+        with Session() as s:
+            code, out, err = s.run(*COIN, ["btc", "--venue", "bybit", "--json"])
+            d = json.loads(out)
+            self.assertNotIn("beta", d)
+
+
+if __name__ == "__main__":
+    unittest.main()

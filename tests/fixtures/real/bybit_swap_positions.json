@@ -1,0 +1,56 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/bybit.json",
+ "method": "fetchPositions",
+ "description": "positions with realisedPNL",
+ "response": {
+  "retCode": "0",
+  "retMsg": "OK",
+  "result": {
+   "nextPageCursor": "TRIAUSDT%2C1770811200032%2C0",
+   "category": "linear",
+   "list": [
+    {
+     "symbol": "TRIAUSDT",
+     "leverage": "2",
+     "breakEvenPrice": "0.01955723",
+     "autoAddMargin": "0",
+     "avgPrice": "0.01961459",
+     "liqPrice": "0.04102339",
+     "riskLimitValue": "5000",
+     "takeProfit": "",
+     "positionValue": "229.68681",
+     "isReduceOnly": false,
+     "positionIMByMp": "101.1025483",
+     "tpslMode": "Full",
+     "riskId": "1",
+     "trailingStop": "0",
+     "liqPriceByMp": "",
+     "unrealisedPnl": "28.23968",
+     "markPrice": "0.017203",
+     "adlRankIndicator": "5",
+     "cumRealisedPnl": "-0.41970255",
+     "positionMM": "4.4079259",
+     "createdTime": "1770457253034",
+     "positionIdx": "0",
+     "positionIM": "101.1025483",
+     "positionMMByMp": "4.4079259",
+     "seq": "130752219714",
+     "updatedTime": "1770811200032",
+     "side": "Sell",
+     "bustPrice": "",
+     "positionBalance": "0",
+     "leverageSysUpdatedTime": "",
+     "curRealisedPnl": "-0.41970255",
+     "size": "11710",
+     "positionStatus": "Normal",
+     "mmrSysUpdatedTime": "",
+     "stopLoss": "0.024012",
+     "tradeMode": "0",
+     "sessionAvgPrice": ""
+    }
+   ]
+  },
+  "retExtInfo": {},
+  "time": "1770825492605"
+ }
+}

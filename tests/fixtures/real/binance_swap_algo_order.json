@@ -1,0 +1,30 @@
+{
+ "source": "CCXT static response tests (MIT licence), github.com/ccxt/ccxt ts/src/test/static/response/binance.json",
+ "method": "createOrder",
+ "description": "createOrder conditional linear swap",
+ "response": {
+  "algoId": "3386",
+  "clientAlgoId": "SQPifLIBAzZf0o4YAOGIwm",
+  "algoType": "CONDITIONAL",
+  "orderType": "STOP",
+  "symbol": "BTCUSDT",
+  "side": "BUY",
+  "positionSide": "BOTH",
+  "timeInForce": "GTC",
+  "quantity": "0.002",
+  "algoStatus": "NEW",
+  "triggerPrice": "100000.00",
+  "price": "102000.00",
+  "icebergQuantity": null,
+  "selfTradePreventionMode": "EXPIRE_MAKER",
+  "workingType": "CONTRACT_PRICE",
+  "priceMatch": "NONE",
+  "closePosition": false,
+  "priceProtect": false,
+  "reduceOnly": false,
+  "createTime": "1763533029839",
+  "updateTime": "1763533029839",
+  "triggerTime": "0",
+  "goodTillDate": "0"
+ }
+}
