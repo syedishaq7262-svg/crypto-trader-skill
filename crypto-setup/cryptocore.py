@@ -278,6 +278,8 @@ DEFAULTS = {
     "maker_fee_bps": None,
     "slippage_bps": None,            # None: measured from the live order book when a plan is made
     "blocked": [],
+    # news (crypto-news)
+    "news_feeds": None,              # None: the built-in outlets; or a list of feed URLs, or [name, url] pairs
 }
 
 _CONFIG_CACHE = {}
@@ -437,28 +439,41 @@ class Http(object):
     def _fixture_path(self, root, host, k):
         return os.path.join(root, host, k + ".json.gz")
 
-    def request(self, method, url, params=None, body=None, headers=None, weight=1, raw=False):
-        """Returns parsed JSON (or text with raw=True). Raises CryptoError subclasses."""
+    def request(self, method, url, params=None, body=None, headers=None, weight=1, raw=False,
+                query=None, data=None, errors="raise", retry=True, private=False):
+        """Returns parsed JSON (or text with raw=True). Raises CryptoError subclasses.
+
+        Signed account calls (crypto-broker) pass the exact `query` string or body `data`
+        they signed, `private=True` (never recorded, never answered offline), `retry=False`
+        for anything that places or changes an order (a retried timeout could place it twice),
+        and errors="return" to get (status, body) back instead of an exception.
+        """
         method = method.upper()
         host = urllib.parse.urlparse(url).netloc
-        k, desc = self.key(method, url, params, body)
-        if self.offline:
+        if private and self.offline and not self.transport:
+            raise CryptoError("offline mode cannot reach your exchange account")
+        k, desc = self.key(method, url, params if query is None else {"_q": query}, body)
+        if self.offline and not private:
             p = self._fixture_path(self.offline, host, k)
             rec = read_json(p, None)
             if rec is None:
                 raise OfflineMiss("offline mode: no saved response for %s" % desc[:240])
             return self._finish(host, rec["status"], rec.get("headers") or {}, rec["text"].encode("utf-8"), raw)
         full = url
-        if params:
+        if query:
+            full += ("&" if "?" in url else "?") + query
+        elif params:
             full += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
-        data = None
         hdrs = {"User-Agent": USER_AGENT, "Accept": "application/json", "Accept-Encoding": "gzip"}
-        if body is not None:
+        if data is not None:
+            data = data.encode("utf-8") if isinstance(data, str) else data
+        elif body is not None:
             data = json.dumps(body).encode("utf-8")
             hdrs["Content-Type"] = "application/json"
         if headers:
             hdrs.update(headers)
         attempt = 0
+        max_retries = self.retries if retry else 0
         while True:
             self._take(host, weight)
             t0 = time.time()
@@ -486,7 +501,9 @@ class Http(object):
                 err = "HTTP %d" % status
             if err is None:
                 break
-            if attempt >= self.retries:
+            if attempt >= max_retries:
+                if errors == "return" and status:
+                    break
                 if status in (429,):
                     raise RateLimited("%s kept answering 'too many requests'. Try again in a minute." % host)
                 raise NetError("could not reach %s: %s" % (host, err))
@@ -496,7 +513,13 @@ class Http(object):
             pause = retry_after if retry_after is not None else 0.6 * (2 ** (attempt - 1)) + random.random() * 0.3
             time.sleep(min(pause, 20.0))
         text = payload.decode("utf-8", "replace")
-        if self.record and status < 500:
+        if errors == "return":
+            try:
+                parsed = json.loads(text) if text.strip() else None
+            except ValueError:
+                parsed = {"_text": " ".join(text.split())[:300]}
+            return status, parsed
+        if self.record and status < 500 and not private:
             p = self._fixture_path(self.record, host, k)
             os.makedirs(os.path.dirname(p), exist_ok=True)
             rec = {"request": desc, "status": status, "text": text}
@@ -2201,6 +2224,15 @@ def fmt_money(x):
     if x is None:
         return "-"
     return ("-$" if x < 0 else "$") + "{:,.2f}".format(abs(x))
+
+
+def fmt_liq(liq, ref, tick=None):
+    """'2.4512 (17.3% away)', or 'none above zero' (a 1x long is never liquidated above zero)."""
+    if liq is None:
+        return "-"
+    if liq <= 0:
+        return "none above zero"
+    return "%s (%s away)" % (fmt_price(liq, tick), fmt_pct(abs(ref - liq) / ref, 1, False))
 
 
 def fmt_qty(q, step=None):

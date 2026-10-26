@@ -22,7 +22,7 @@ class Card(unittest.TestCase):
                     self.assertNotIn(word, out.lower())
 
     def test_json_has_what_the_planner_needs(self):
-        with Session() as s:
+        with Session(config={"session": "ny"}) as s:
             code, out, err = s.run(*COIN, ["orbx", "--venue", "binance", "--json"])
             d = json.loads(out)
             for k in ("price", "high_24h", "low_24h", "support", "resistance", "atr_1h_pct", "atr_1d_pct",

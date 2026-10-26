@@ -1,0 +1,167 @@
+---
+name: crypto-scout
+description: >-
+  Scout for crypto perpetual futures: what is worth a look today, ranked by
+  evidence instead of excitement. Scans every liquid perpetual (or reuses a
+  scan under 15 minutes old), reads the market regime, plans the strongest
+  live setups with the Exit Planner's defaults, then tests each one on its
+  own coin's last 30 days with the Time Machine: replays, the same rule's
+  past trades, and an edge test against random entries at the same hours,
+  all after fees, slippage and funding. Corrects for testing many setups at
+  once (Benjamini-Hochberg), flags trades that have already run, crowded
+  sides, costly funding and a regime against the side, and sorts them into
+  has the evidence, worth watching, no edge, and cannot be tested. Often
+  the honest answer is that nothing qualifies today. `pick N` hands one to
+  /crypto-budget. Use when the user says "what should I trade today", "what
+  is worth trading", "find me a trade", "best setups right now", "anything
+  good today", "what has an edge", "where should I put money today", or
+  wants the scanner's hits ranked.
+argument-hint: "[--top 10] [--symbols BTC,ETH] [--side long|short] [--session ny] | pick <N>"
+---
+
+# crypto-scout
+
+The scanner finds charts that match a rule. The Scout asks the next
+question: has that rule, on that coin, made money lately, after costs, more
+often than luck would? It plans each live setup the way the Exit Planner
+would (the setup's own stop, a 2R target, a 24-hour time limit), replays it
+on the coin's own last 30 days, re-runs the same rule on those days to see
+how its past trades went, and compares them with random entries at the same
+hours of the day. Then it corrects for having tested many setups at once,
+because one in ten will look good by chance when you test ten.
+
+Most days, nothing clears that bar. The board says so plainly: not trading
+is a position too. When something does clear it, that is evidence from a
+small sample, not a promise. Day trading loses most people money.
+
+`${CLAUDE_SKILL_DIR}` below is this skill's folder (where this SKILL.md lives).
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scout.py"                        # scan, plan and test the 10 strongest setups
+python3 "${CLAUDE_SKILL_DIR}/scout.py" --top 5 --session ny   # fewer, faster; the New York opening range
+python3 "${CLAUDE_SKILL_DIR}/scout.py" --symbols BTC,ETH,SOL  # only these coins
+python3 "${CLAUDE_SKILL_DIR}/scout.py" --side long            # longs only
+python3 "${CLAUDE_SKILL_DIR}/scout.py" pick 1                 # board entry 1 becomes the plan, with its test
+```
+
+Flags: `--top N` (1 to 40, default 10), `--symbols`, `--setups orb,breakout,...`,
+`--side long|short|both`, `--session utc|tokyo|london|ny`, `--rescan` (ignore
+a fresh watchlist), `--replays N` (default 2,000 per setup), `--seed`,
+`--venue`, `--now`, `--offline`, `--record`, `--json`, `--no-write`, `--stats`.
+Exit code 0 when at least one setup has the evidence, 1 when none does, 1
+with one plain line on a problem.
+
+## What it reads and writes
+
+| file | what |
+| --- | --- |
+| `crypto/watchlist.json` | the scanner's hits; reused when under 15 minutes old on the same venue, otherwise a new scan writes it |
+| `crypto/regime.json` | the market regime; reused for 2 hours |
+| exchange data | 30 days of 5-minute bars per tested coin (17 on Hyperliquid), funding history, open interest, long/short positioning, the order book (slippage) |
+| `crypto/config.json` | the Exit Planner's defaults, fees, `slippage_bps`, `min_reward_risk`, `min_quote_volume_usd`, `allow_short` |
+| `crypto/scout.json` | the board: every tested setup with its plan, its Time Machine result, its flags and its tier |
+| `crypto/plan.json`, `crypto/timemachine.json` | written by `pick N` |
+
+## How a setup earns its place
+
+1. **Planned like a real trade.** Entry at the trigger if it fired in the
+   last 10 minutes, otherwise at the market; the setup's own stop; 2R (or
+   `min_reward_risk`); out within 24 hours.
+2. **Replayed.** Thousands of block-bootstrapped days from the coin's own
+   recent 5-minute bars, scaled to today's volatility, with funding charged
+   at each payment time and fees and slippage taken from every exit.
+3. **Its own history.** The scanner's exact rule re-run on the same 30 days,
+   one trade at a time, each played out bar by bar with the same stop and
+   target rules.
+4. **The edge test.** 100 random entries per past trade at the same time of
+   day, with the same stop distance (in volatility terms) and the same
+   target. The luck figure is how often random entries did as well as the
+   rule.
+5. **Tested together.** The luck figures of every tested setup go through a
+   Benjamini-Hochberg correction at a 10% false-discovery rate. Only the ones
+   that survive count as evidence.
+6. **Flags.** Hard: the price has already run more than half the risk past
+   the trigger, or is past the stop. Soft: a long in a Risk-off, Fearful or
+   Overheated market (a short in a Risk-on one), joining crowded longs or
+   shorts, funding of 30% a year or more against the side, costs over 0.2R
+   at a stop-out, thin 24-hour volume, reward:risk under the minimum.
+
+| tier | what it means |
+| --- | --- |
+| Has the evidence here | 10 or more past trades, made money after costs, beat random entries clearly enough to survive the correction, and nothing against it |
+| Worth watching | made money in its past trades, but too few of them, not clearly better than random entries, or something against it today |
+| No edge on this coin lately | lost money after costs over its past trades, or even the best case of its win rate is under break-even |
+| Cannot be tested | no fixed entry rule to re-run (relative strength) |
+
+Within a tier, setups rank by their edge over random entries, shrunk toward
+zero when there are few trades. A squeeze that is coiled but has not broken
+has no side yet: the board lists it, and `/crypto-entry COIN --setup squeeze`
+waits for the break.
+
+## Steps
+
+1. Run `scout.py` (add `--session ny` for the New York opening range, or the
+   user's own session). It takes a minute or two on live data: say so.
+2. Read back the regime line, then the top tier. If "Has the evidence here"
+   is empty, say exactly that: nothing has the evidence today, and not
+   trading is a fine answer. Do not dress up a "worth watching" setup as a
+   recommendation.
+3. For each setup worth mentioning: coin, side, setup, the history line
+   (average R after costs, how many trades, the luck figure), the plan
+   (entry, stop, target, time limit), and every flag.
+4. If the user wants to take one further: `scout.py pick N`, then
+   `/crypto-budget`, `/crypto-liquidation`, `/crypto-risk`, and only then
+   `/crypto-broker`. The board goes stale in 30 minutes; `pick` refuses an
+   older one.
+5. For a full picture of one coin first, `/crypto-coin COIN`.
+
+## Example
+
+From the pack's offline test market (synthetic prices, not real data),
+shortened:
+
+```
+Scout | Binance USD-M futures | 2026-10-21 15:15 UTC
+Regime: Mixed. No clear tide. Setups stand on their own; size down and be picky.
+46 setups live in the scan; 10 tested on each coin's own last 30 days, after fees, slippage and funding.
+
+Worth watching (positive, not proven) (4)
+ 1. VOLX long, volume spike (spike 15:15 UTC)
+     history +1.96R a trade over 3 trades, target first 3 of 3; random entries +0.00R; luck matches it 0.2% of the time (still clear after testing 10 setups at once)
+     plan: entry 0.68892, stop 0.66998, target 0.72680 (2.0R), out within 24h; replays: leans toward the stop
+ 2. TIA short, range breakout (fresh 15:15 UTC)
+     history +0.04R a trade over 16 trades, target first 6 of 16; random entries -0.23R; luck matches it 19% of the time
+     plan: entry 5.0083, stop 5.1027, target 4.8195 (2.0R), out within 24h; replays: close to break-even
+
+No edge on this coin lately (6)
+ 6. BRKD short, range breakout (fresh 15:15 UTC)
+     history -0.15R a trade over 12 trades, target first 4 of 12; random entries -0.24R; luck matches it 30% of the time
+
+Nothing has the evidence today: no setup beat random entries on its own coin's last 30 days clearly enough to survive testing them all at once, with nothing against it. Not trading is a position too.
+```
+
+VOLX's three past trades all won, and random entries rarely do that, but
+three trades is not a record. That is why it is worth watching and not
+evidence.
+
+## Rules
+
+- Evidence ranks the board, never the size of a move or a story about a coin.
+- Report the luck figure and the trade count with every result. A big
+  average over three trades is three trades.
+- Never promote a setup from "worth watching" to a recommendation, and never
+  re-run the Scout until something shows up.
+- Past trades on 30 days of one coin are a small sample. Say so when it matters.
+
+## What it never does
+
+It never places an order, never sizes a position, never loosens a rule to
+get a setup onto the board, and never calls a result a forecast.
+
+## Safety
+
+- Education and tooling, not financial advice. The pack does not know the user's situation or the future. Most people who day trade lose money, and leverage makes losses arrive faster.
+- Paper trading by default (`"paper": true`): simulated fills at live prices against the real order book. Going live is the user's own decision, in their own config.
+- Nothing in this pack places an order except crypto-broker, and only when all of these hold: crypto-risk passed that exact order, the user typed an explicit yes for that one order in the chat, and, for a live order, the user's own keys are in environment variables. Never ask for keys in the chat.
+- Every order carries a stop. Isolated margin and a 3x leverage cap by default; cross margin stays off unless the user turns it on.
+- Claude reports what the tools print. It never invents a price, a level, a probability or a funding rate, and never calls a setup a sure thing.

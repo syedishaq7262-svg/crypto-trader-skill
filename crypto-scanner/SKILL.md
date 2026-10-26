@@ -76,7 +76,11 @@ Each one uses closed candles only, never the bar still forming.
    of the previous 24 hours on at least 1.5x its median volume. `fresh` if
    the bar before was still inside.
 3. **squeeze** The 1-hour Bollinger band width (20, 2) is in the lowest 10%
-   of the last 30 days. No side yet: a break of either band picks it.
+   of the last 30 days: `coiled`, no side yet (`/crypto-entry COIN --setup
+   squeeze` waits for the break). The break itself is a hit with a side: the
+   first 1-hour close outside the bands after a squeeze in the 12 hours
+   before, `broke up` or `broke down`, with the middle band as its stop
+   reference.
 4. **trend** 1-hour 20, 50 and 200 averages stacked in one direction and the
    price on the right side of the 50; a 15-minute pullback of at least 0.5%
    touched the 15-minute 20 average and the last bar closed back over it.

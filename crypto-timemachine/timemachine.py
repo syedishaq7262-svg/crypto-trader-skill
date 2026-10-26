@@ -40,8 +40,8 @@ SLOTS = 288
 TARGET, STOP, OPEN = 1, 2, 3
 OUTCOME = {TARGET: "target", STOP: "stop", OPEN: "open"}
 SETUP_WORDS = {"orb": "opening-range", "breakout": "range-breakout", "trend": "trend-pullback",
-               "reversal": "RSI-reversal", "volume": "volume-spike"}
-HISTORY_SETUPS = ("orb", "breakout", "trend", "reversal", "volume")
+               "reversal": "RSI-reversal", "volume": "volume-spike", "squeeze": "squeeze-break"}
+HISTORY_SETUPS = ("orb", "breakout", "trend", "reversal", "volume", "squeeze")
 
 
 def load_sibling(folder, name):
@@ -408,6 +408,12 @@ def history_events(scan, setup, m, bars, side):
                 x = scan.Ctx(m, {}, [], b1h[max(0, k - 259):k + 1], b15=[])
                 for h in scan.setup_reversal(x, a, [side]):
                     events.append(dict(h))
+        elif name == "squeeze" and hasattr(scan, "setup_squeeze_break"):
+            b1h = cc.resample(bars, "1h")
+            for k in range(250, len(b1h)):
+                x = scan.Ctx(m, {}, [], b1h[max(0, k - 749):k + 1], b15=[])
+                for h in scan.setup_squeeze_break(x, a, [side]):
+                    events.append(dict(h))
     finally:
         cc.set_now(saved_now)
     events.sort(key=lambda e: e["at"])
@@ -421,7 +427,7 @@ def stop_for_event(plan, ev, entry):
     spec = (plan.get("stop_spec") or "").lower()
     atr = ev.get("atr15")
     if spec == "setup":
-        return ev.get("stop_ref")
+        return ev["stop_ref_raw"] if ev.get("stop_ref_raw") is not None else ev.get("stop_ref")
     if spec == "range":
         mt = ev.get("metrics") or {}
         return mt.get("or_low") if plan["side"] == "long" else mt.get("or_high")
@@ -444,10 +450,16 @@ def run_history(scan, plan, m, bars, funding, costs, n_steps):
     setup = plan.get("setup") or {}
     name = setup.get("name")
     res = {"setup": name, "events": 0, "trades": [], "skipped": 0, "unfinished": 0, "overlap": 0}
+    if name == "squeeze" and setup.get("status") == "coiled":
+        res["note"] = ("this plan enters before the squeeze breaks, and the squeeze rule only trades the break "
+                       "(time it with /crypto-entry %s --setup squeeze)" % plan.get("coin", ""))
+        return res
     if name not in HISTORY_SETUPS or scan is None:
         res["note"] = ("no setup to re-run" if not name else
-                       "the %s setup has no fixed entry rule to re-run" % name if name in ("squeeze", "rs") else
-                       "crypto-scanner is not installed next to this skill")
+                       "a hand-picked level has no past to re-run" if name == "level" else
+                       "the %s setup has no fixed entry rule to re-run" % name if name == "rs" else
+                       "crypto-scanner is not installed next to this skill" if scan is None else
+                       "the %s setup has no rule to re-run" % name)
         return res
     side = plan["side"]
     sg = cc.side_sign(side)
@@ -646,25 +658,13 @@ def final_verdict(mc_label, hist, base, breakeven):
 
 # ---------------------------------------------------------------- the run
 
-def run(a, cfg):
-    plan = cc.read_json(a.plan or cc.wpath("plan.json"), None)
-    if not plan:
-        raise cc.CryptoError("no plan to replay. Make one first: /crypto-exit (exit.py plan <COIN>)")
-    for k in ("venue", "symbol", "side", "entry", "stop", "target", "entry_time", "exit_by", "risk", "target_r"):
-        if plan.get(k) is None:
-            raise cc.CryptoError("the plan is missing %s; make it again with /crypto-exit" % k)
-    plan["_seed"] = a.seed
-    plan.setdefault("plan_id", cc.plan_id(plan))
-    venue = cc.get_venue(plan["venue"])
-    sym, side = plan["symbol"], plan["side"]
+def fetch_pool(venue, plan, days):
+    """30 days (or `days`) of 5-minute bars before the plan's entry, and the funding paid over them."""
+    sym = plan["symbol"]
     entry_time = (plan["entry_time"] // STEP) * STEP
-    n_steps = int((plan["exit_by"] - entry_time) // STEP)
-    if n_steps < 1:
-        raise cc.CryptoError("the plan's time limit is before its entry")
-    days = a.days
-    note_days = None
+    note = None
     if venue.name == "hyperliquid" and days > 17:
-        days, note_days = 17, "Hyperliquid keeps about 17 days of 5-minute candles, so the pool is 17 days."
+        days, note = 17, "Hyperliquid keeps about 17 days of 5-minute candles, so the pool is 17 days."
     start = entry_time - days * DAY
     jobs = {"bars": lambda: venue.bars_between(sym, "5m", start, entry_time - 1),
             "funding": lambda: venue.funding_history(sym, start, entry_time)}
@@ -674,11 +674,30 @@ def run(a, cfg):
             raise cc.CryptoError("could not read %s candles: %s" % (sym, e))
         got[k] = r if e is None else []
     bars = [b for b in got["bars"] if b[T] < entry_time]
+    return bars, got.get("funding") or [], days, note
+
+
+def evaluate(plan, venue, cfg, replays=10000, seed=19, days=30, block=12.0, window=2, vol_scale=True,
+             keep_drift=False, baseline=True, pool_data=None, scan=None, paths=400):
+    """Everything the Time Machine knows about one plan, as the dict it saves in crypto/timemachine.json.
+    pool_data, when given, is fetch_pool's answer (crypto-scout fetches it once and reuses it)."""
+    for k in ("venue", "symbol", "side", "entry", "stop", "target", "entry_time", "exit_by", "risk", "target_r"):
+        if plan.get(k) is None:
+            raise cc.CryptoError("the plan is missing %s; make it again with /crypto-exit" % k)
+    plan = dict(plan)
+    plan["_seed"] = seed
+    plan.setdefault("plan_id", cc.plan_id(plan))
+    side = plan["side"]
+    entry_time = (plan["entry_time"] // STEP) * STEP
+    n_steps = int((plan["exit_by"] - entry_time) // STEP)
+    if n_steps < 1:
+        raise cc.CryptoError("the plan's time limit is before its entry")
+    bars, fund_hist, days, note_days = pool_data if pool_data is not None else fetch_pool(venue, plan, days)
     if len(bars) < 3 * SLOTS:
         raise cc.CryptoError("only %d five-minute bars before the entry; the Time Machine needs at least 3 days" % len(bars))
     costs = cc.plan_costs(plan, venue, cfg)
     pc = plan.get("costs") or {}
-    pool = Pool(bars, vol_scale=not a.no_vol_scale, keep_drift=a.keep_drift, window=a.window)
+    pool = Pool(bars, vol_scale=vol_scale, keep_drift=keep_drift, window=window)
     rate = pc.get("funding_rate") or 0.0
     hours = pc.get("funding_hours") or 8.0
     fund_steps = {}
@@ -687,38 +706,49 @@ def run(a, cfg):
         if 1 <= k < n_steps:
             fund_steps[k] = rate
     slot0 = slot_of(entry_time)
-    results = run_mc(pool, side, plan["entry"], plan["stop"], plan["target"], n_steps, slot0, a.block, a.replays, a.seed, fund_steps)
+    results = run_mc(pool, side, plan["entry"], plan["stop"], plan["target"], n_steps, slot0, block, replays, seed, fund_steps)
     mc = summarize_mc(results, plan, costs)
-    paths = run_paths(pool, plan["entry"], n_steps, slot0, a.block, 400, a.seed + 1)
-    mc["bands"] = bands_of(paths)
-    mc["sample_paths"] = [[round(x, 10) for x in p[::max(1, n_steps // 60)]] for p in paths[:40]]
-    funding = Funding(got.get("funding"), rate, hours)
-    scan = load_sibling("crypto-scanner", "scan")
+    if paths:
+        sample = run_paths(pool, plan["entry"], n_steps, slot0, block, paths, seed + 1)
+        mc["bands"] = bands_of(sample)
+        mc["sample_paths"] = [[round(x, 10) for x in p[::max(1, n_steps // 60)]] for p in sample[:40]]
+    funding = Funding(fund_hist, rate, hours)
+    if scan is None:
+        scan = load_sibling("crypto-scanner", "scan")
     hist = run_history(scan, plan, plan_market(plan), bars, funding, costs, n_steps)
     base = None
-    if hist.get("n", 0) >= 3 and not a.no_baseline:
-        base = run_baseline(plan, bars, hist, funding, costs, n_steps, pool, a.seed)
+    if hist.get("n", 0) >= 3 and baseline:
+        base = run_baseline(plan, bars, hist, funding, costs, n_steps, pool, seed)
     exit_words = cc.fmt_utc(plan["exit_by"])
     head, sub = mc_verdict(mc, plan, exit_words)
     label = head.split(":")[0]
     verdict = final_verdict(label, hist, base, mc["breakeven"])
-    data = {
+    return {
         "version": 1, "run_at": cc.now_ms(),
         "plan_ref": dict((k, plan.get(k)) for k in ("plan_id", "created_at", "venue", "symbol", "coin", "side", "entry",
                                                   "stop", "target", "target_r", "entry_time", "exit_by")),
-        "params": {"replays": a.replays, "seed": a.seed, "block": a.block, "window": a.window, "days": days,
-                   "vol_scale": not a.no_vol_scale, "keep_drift": a.keep_drift, "n_steps": n_steps},
+        "params": {"replays": replays, "seed": seed, "block": block, "window": window, "days": days,
+                   "vol_scale": vol_scale, "keep_drift": keep_drift, "n_steps": n_steps},
         "pool": {"bars": pool.size, "from": bars[0][T], "to": bars[-1][T] + STEP, "vol_ratio": pool.vol_ratio,
                  "clipped": pool.clipped, "drift_per_day": pool.mu * SLOTS},
         "costs": costs, "funding_rate": rate, "funding_hours": hours,
         "mc": mc, "history": hist, "baseline": base,
         "verdict": {"mc": head, "notes": sub, "final": verdict}, "notes": [x for x in [note_days] if x],
     }
+
+
+def run(a, cfg):
+    plan = cc.read_json(a.plan or cc.wpath("plan.json"), None)
+    if not plan:
+        raise cc.CryptoError("no plan to replay. Make one first: /crypto-exit (exit.py plan <COIN>)")
+    venue = cc.get_venue(plan.get("venue"))
+    data = evaluate(plan, venue, cfg, replays=a.replays, seed=a.seed, days=a.days, block=a.block, window=a.window,
+                    vol_scale=not a.no_vol_scale, keep_drift=a.keep_drift, baseline=not a.no_baseline)
     if not a.no_write:
         cc.write_json(cc.wpath("timemachine.json"), data)
     if a.json:
         slim = dict(data)
-        slim["mc"] = dict((k, v) for k, v in mc.items() if k not in ("sample_paths",))
+        slim["mc"] = dict((k, v) for k, v in data["mc"].items() if k not in ("sample_paths",))
         cc.dump(slim)
     else:
         print_run(data, plan)

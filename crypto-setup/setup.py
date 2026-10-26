@@ -55,6 +55,24 @@ def probe(vn):
     return row
 
 
+EXTRAS = [
+    ("News feed (CoinDesk)", "GET", "https://www.coindesk.com/arc/outboundfeeds/rss/", True),
+    ("Macro calendar", "GET", "https://nfs.faireconomy.media/ff_calendar_thisweek.json", False),
+    ("Bybit announcements", "GET", "https://api.bybit.com/v5/announcements/index?locale=en-US&limit=1", False),
+]
+
+
+def probe_extra(item):
+    """(label, ok, note) for a source a skill other than the exchanges reads."""
+    label, method, url, raw = item
+    t0 = time.time()
+    try:
+        cc.HTTP.request(method, url, raw=raw)
+        return label, True, "answered in %d ms" % ((time.time() - t0) * 1000)
+    except cc.CryptoError as e:
+        return label, False, "%s (only the skill that reads it is affected)" % str(e)[:90]
+
+
 def doctor(a):
     now = cc.now_ms()
     cc.out("Doctor | %s | Python %s on %s" % (cc.fmt_utc(now), platform.python_version(), platform.system() or "?"))
@@ -77,6 +95,8 @@ def doctor(a):
         cc.out("  %-24s ok       %d (%s)" % ("Fear & Greed index", fg[0][1], fg[0][2]) if fg else "  Fear & Greed index      empty")
     except cc.CryptoError as e:
         cc.out("  %-24s down     %s" % ("Fear & Greed index", e))
+    for label, ok, note in [r for _, r, _ in cc.parallel(probe_extra, EXTRAS, workers=3)]:
+        cc.out("  %-24s %-8s %s" % (label, "ok" if ok else "down", note))
     wd = cc.workdir()
     try:
         os.makedirs(wd, exist_ok=True)
@@ -95,7 +115,8 @@ def doctor(a):
                            "none (fine: every skill except a live crypto-broker works without keys)"))
     best = [r for r in rows if r["status"] == "ok"]
     if not best:
-        cc.out("No exchange answered from here. Check your internet connection or a VPN, then run this again.")
+        cc.out("No exchange answered from here. Check the internet connection and run this again. If the exchanges "
+               "block this location, the pack cannot reach them from here.")
         return 1
     pick = best[0]
     if not a.no_write and not os.environ.get("CRYPTO_OFFLINE"):

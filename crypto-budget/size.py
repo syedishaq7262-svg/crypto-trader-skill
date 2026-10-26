@@ -201,10 +201,10 @@ def print_order(o, cfg, m):
     cc.out("Stop %s (%s): lose about $%.2f there, fees, slippage and funding included." % (P(o["stop"]), o["stop_type"], o["loss_at_stop_usd"]))
     cc.out("Target %s (%s): make about $%.2f there after fees. Reward:risk %.2f." % (P(o["target"]), o["target_type"],
                                                                                    o["gain_at_target_usd"], o["reward_risk"]))
-    dist = abs(o["entry"] - o["liq_est"]) / o["entry"]
     sdist = abs(o["entry"] - o["stop"]) / o["entry"]
-    cc.out("Estimated liquidation %s: %s away, the stop %s away (%s, maintenance %s)." %
-           (P(o["liq_est"]), cc.fmt_pct(dist, 1, False), cc.fmt_pct(sdist, 2, False), o["mmr_source"], cc.fmt_pct(o["mmr"], 2, False)))
+    cc.out("Estimated liquidation %s; the stop is %s away (%s, maintenance %s)." %
+           (cc.fmt_liq(o["liq_est"], o["entry"], o.get("tick")), cc.fmt_pct(sdist, 2, False), o["mmr_source"],
+            cc.fmt_pct(o["mmr"], 2, False)))
     cc.out("Out by %s, win or lose." % cc.fmt_local(o["exit_by"]))
     for n in o.get("notes") or []:
         cc.out("Note: " + n)

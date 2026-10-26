@@ -51,12 +51,23 @@ class FromAHit(unittest.TestCase):
             self.assertGreater(p["stop"], p["entry"])
             self.assertLess(p["target"], p["entry"])
 
-    def test_a_squeeze_needs_a_side(self):
+    def test_a_squeeze_break_has_a_side_and_a_coil_needs_one(self):
         with Session() as s:
             s.run(*SCAN, ["--venue", "binance", "--setups", "squeeze"])
+            w = cc.read_json(s.path("watchlist.json"))
+            sq = [h for h in w["hits"] if h["coin"] == "SQZX"]
+            self.assertEqual(sorted(h["status"] for h in sq), ["broke down", "coiled"])
+            code, out, err = s.run(*EXIT, ["plan", "SQZX"])
+            self.assertEqual(code, 0, err)                                # the break: a side and a setup stop
+            p = plan_of(s)
+            self.assertEqual((p["side"], p["stop_spec"]), ("short", "setup"))
+            self.assertIn("the middle band", p["stop_rule"])
+            w["hits"] = [h for h in w["hits"] if h["status"] == "coiled"]
+            cc.write_json(s.path("watchlist.json"), w)
             code, out, err = s.run(*EXIT, ["plan", "SQZX"])
             self.assertEqual(code, 1)
             self.assertIn("which side", err)
+            self.assertIn("a squeeze has no side until a band breaks", err)
             code, out, err = s.run(*EXIT, ["plan", "SQZX", "--side", "long"])
             self.assertEqual(code, 0, err)                                # no setup stop: atr:1.5 by default
             self.assertTrue(plan_of(s)["stop_spec"].startswith("atr:"))
@@ -84,9 +95,11 @@ class Manual(unittest.TestCase):
                 self.assertGreaterEqual(p["entry"] - p["stop"], 0.5 * p["atr15"])
             else:
                 self.assertIn("no 1-hour swing", err)
-            s.run(*EXIT, ["plan", "SOL", "--side", "short", "--manual", "--venue", "bybit", "--stop", "140", "--target", "3R"])
+            px = cc.get_venue("bybit").ticker("SOLUSDT")["last"]
+            stop = round(px * 1.05, 3)
+            s.run(*EXIT, ["plan", "SOL", "--side", "short", "--manual", "--venue", "bybit", "--stop", str(stop), "--target", "3R"])
             p = plan_of(s)
-            self.assertEqual(p["stop"], 140.0)
+            self.assertEqual(p["stop"], stop)
             self.assertAlmostEqual(p["target_r"], 3.0, places=2)
 
     def test_target_rules_and_hold(self):

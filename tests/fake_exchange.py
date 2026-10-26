@@ -19,6 +19,8 @@ Failure switches (FAKE_EXCHANGE_MODE, comma separated):
   garbage           one coin's candles come back with a broken row
 """
 
+import email.utils
+import importlib.util
 import json
 import math
 import os
@@ -28,9 +30,15 @@ import threading
 import urllib.parse
 from datetime import datetime, timezone
 
+_fa = importlib.util.spec_from_file_location("fake_accounts", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                                           "fake_accounts.py"))
+fake_accounts = importlib.util.module_from_spec(_fa)
+_fa.loader.exec_module(fake_accounts)
+
 STEP = 300000           # 5-minute bars
 DAY = 86400000
 HISTORY_DAYS = 35
+ANCHOR = int(datetime(2026, 9, 10, tzinfo=timezone.utc).timestamp() * 1000)
 
 # coin: (start price, daily vol, beta to BTC, 24h volume USD, listed days ago, note)
 COINS = [
@@ -124,7 +132,7 @@ class Market(object):
     def __init__(self, now):
         self.now = now
         self.cur_open = (now // STEP) * STEP          # the bar still forming
-        self.start = self.cur_open - HISTORY_DAYS * DAY
+        self.start = min(ANCHOR, self.cur_open - HISTORY_DAYS * DAY)
         self.times = list(range(self.start, self.cur_open + STEP, STEP))
         self.seasons = [_season(t) for t in self.times]
         self.paths = {}
@@ -160,7 +168,8 @@ class Market(object):
                 return self.paths[coin]
         spec = [c for c in COINS if c[0] == coin][0]
         _, p0, dvol, beta, vol24, listed, note = spec
-        rng = random.Random(sum(ord(ch) * (i + 1) for i, ch in enumerate(coin)) + 11)
+        seed = sum(ord(ch) * (i + 1) for i, ch in enumerate(coin)) + 11
+        rng = random.Random(seed)
         btc = self._btc()
         if coin == "BTC":
             rs = list(btc)
@@ -172,7 +181,7 @@ class Market(object):
         if note == "squeeze":
             cut = len(rs) - 3 * 288
             rs = [r if i < cut else 0.15 * r for i, r in enumerate(rs)]
-        bars = self._bars(rng, p0, rs, dvol, vol24)
+        bars = self._bars(random.Random(seed * 7919), p0, rs, dvol, vol24)   # its own stream: the past never changes as 'now' moves
         listed_ms = self.now - listed * DAY
         bars = [b for b in bars if b[0] >= (listed_ms // STEP) * STEP]
         bars = self._shape(coin, note, bars, dvol, vol24, rng)
@@ -285,7 +294,7 @@ class Market(object):
                 self._set(bars, k, prev, c, 0.9, 0.0004, base_qv)
                 prev = c
             for k in range(last - 2, last + 1):
-                c = prev * 1.0028
+                c = prev * 1.0045
                 self._set(bars, k, prev, c, 1.8, 0.0004, base_qv)
                 prev = c
         elif note == "volume_spike":
@@ -407,8 +416,37 @@ def _fmt(x):
 
 # ---------------------------------------------------------------- shared bar helpers
 
+def minute_bars(coin, start, end):
+    """1-minute bars cut from each 5-minute bar: a straight walk from open to close that visits
+    the high in the second minute and the low in the fourth (the other way round on down bars)."""
+    m = market()
+    raw = m.path(coin)
+    out = []
+    if not raw:
+        return out
+    i0 = max(0, (start - raw[0][0]) // STEP - 1)
+    for b in raw[int(i0):]:
+        if b[0] > end:
+            break
+        t, o, h, lo, c, v, qv = b
+        pts = [o + (c - o) * k / 5.0 for k in range(6)]
+        for k in range(5):
+            mo, mc = pts[k], pts[k + 1]
+            mh, ml = max(mo, mc), min(mo, mc)
+            if (k == 1 and c >= o) or (k == 3 and c < o):
+                mh = h
+            if (k == 3 and c >= o) or (k == 1 and c < o):
+                ml = lo
+            mt = t + k * 60000
+            if start <= mt <= end and mt <= m.now - 60000:
+                out.append([mt, mo, mh, ml, mc, v / 5.0, qv / 5.0])
+    return out
+
+
 def bars_for(coin, interval_ms, start, end):
     """Aggregate the 5-minute path into interval bars with open time in [start, end]."""
+    if interval_ms < STEP:
+        return minute_bars(coin, start, end)
     m = market()
     raw = m.path(coin)
     if not raw:
@@ -454,7 +492,7 @@ def day_stats(coin):
 
 INTERVALS = {"1m": 60000, "5m": 300000, "15m": 900000, "30m": 1800000, "1h": 3600000, "2h": 7200000,
              "4h": 14400000, "6h": 21600000, "12h": 43200000, "1d": 86400000}
-BYBIT_CODES = {"5": "5m", "15": "15m", "30": "30m", "60": "1h", "120": "2h", "240": "4h", "360": "6h",
+BYBIT_CODES = {"1": "1m", "5": "5m", "15": "15m", "30": "30m", "60": "1h", "120": "2h", "240": "4h", "360": "6h",
                "720": "12h", "D": "1d"}
 BYBIT_PERIODS = {"5min": "5m", "15min": "15m", "30min": "30m", "1h": "1h", "4h": "4h", "1d": "1d"}
 
@@ -627,6 +665,8 @@ def bybit_ok(result):
 def bybit(path, q):
     m = market()
     now = m.now
+    if path == "/v5/announcements/index":
+        return announcements(q)
     if path == "/v5/market/time":
         return bybit_ok({"timeSecond": str(now // 1000), "timeNano": str(now * 1000000)})
     if path == "/v5/market/instruments-info":
@@ -771,6 +811,20 @@ def hyperliquid(body):
         k = mult(coin)
         return [{"t": b[0], "T": b[0] + iv - 1, "s": req.get("coin"), "i": req.get("interval"), "o": _fmt(b[1] * k),
                  "c": _fmt(b[4] * k), "h": _fmt(b[2] * k), "l": _fmt(b[3] * k), "v": _fmt(b[5] * 0.5 / k), "n": 100} for b in rows]
+    if typ == "clearinghouseState":
+        addr = str(body.get("user") or "").lower()
+        idx = [w[0] for w in WHALES if whale_address(w[0]) == addr]
+        pos = whale_positions(idx[0], now) if idx else []
+        acct = [w[2] for w in WHALES if idx and w[0] == idx[0]]
+        av = "%.2f" % (acct[0] if acct else 0.0)
+        summ = {"accountValue": av, "totalMarginUsed": "%.2f" % sum(float(p["position"]["marginUsed"]) for p in pos),
+                "totalNtlPos": "%.2f" % sum(float(p["position"]["positionValue"]) for p in pos), "totalRawUsd": av}
+        return {"assetPositions": pos, "crossMaintenanceMarginUsed": "0.0", "crossMarginSummary": summ, "marginSummary": summ,
+                "time": now, "withdrawable": av}
+    if typ in ("userFills", "userFillsByTime"):
+        addr = str(body.get("user") or "").lower()
+        idx = [w[0] for w in WHALES if whale_address(w[0]) == addr]
+        return whale_fills(idx[0], int(body.get("startTime") or 0), now) if idx else []
     if typ == "fundingHistory":
         coin = coin_of(body.get("coin"), "hyperliquid")
         ts = funding_times(coin, int(body.get("startTime")), int(body.get("endTime", now)), 1)[:500]
@@ -812,6 +866,209 @@ def fear_greed(q):
     return {"name": "Fear and Greed Index", "data": data, "metadata": {"error": None}}
 
 
+# ---------------------------------------------------------------- news feeds, exchange notices, the macro calendar
+# Made-up headlines in each outlet's real feed format (RSS 2.0 with CDATA, one Atom feed), so the parser and
+# the tagging have known answers. None of it is real news.
+
+NEWS = {
+    "www.coindesk.com": ("rss", [
+        (35, "SOL Climbs as Solana Funds Draw Fresh Inflows", "Synthetic test story about Solana fund inflows.", ["Markets"]),
+        (120, "Bitcoin Slips as Traders Brace for Fed Rate Decision", "Synthetic test story ahead of the Fed.", ["Markets"]),
+        (30 * 60, "Ether Options Traders Hedge the Downside", "An older synthetic story.", ["Markets"]),
+    ]),
+    "cointelegraph.com": ("rss", [
+        (60, "Hackers Drain $40 Million From Lending Protocol on Arbitrum", "Synthetic test story about an exploit.", ["Hacks"]),
+        (130, "Bitcoin Dips as Traders Brace for Fed Rate Decision", "The same synthetic story, another outlet.", ["Markets"]),
+        (180, "BRKX Breaks Out as Exchange Lists New Perpetual", "Synthetic test story about BRKX.", ["Altcoins"]),
+    ]),
+    "decrypt.co": ("atom", [
+        (240, "SEC Sues Crypto Lender Over Unregistered Securities", "Synthetic test story about a lawsuit.", ["Law"]),
+        (50, "Dogecoin Whales Move $200 Million to Exchanges", "Synthetic test story about large transfers.", ["Markets"]),
+    ]),
+    "www.theblock.co": ("forbidden", []),
+    "cryptoslate.com": ("entity", []),
+    "bitcoinmagazine.com": ("rss", [
+        (90, "Strategy Buys Another 5,000 BTC", "Synthetic test story about a corporate treasury.", ["Business"]),
+        (None, "An Item With No Date", "It has no pubDate, so the reader skips it.", []),
+    ]),
+    "beincrypto.com": ("rss", [
+        (70, "SOL Price Prediction: Could Solana Hit $300 This Month?", "Synthetic opinion piece.", ["Analysis"]),
+        (75, "THE NEW ERA FOR CRYPTO IS HERE AND ONE BIG TOP IS IN", "An all-caps synthetic headline: no tickers in it.", []),
+    ]),
+}
+
+
+def _rfc822(t):
+    return email.utils.format_datetime(datetime.fromtimestamp(t / 1000.0, tz=timezone.utc))
+
+
+def _ny_iso(t):
+    """New York local time with its offset, as the calendar feed writes dates: 2026-10-21T08:30:00-04:00."""
+    d = datetime.fromtimestamp(t / 1000.0, tz=timezone.utc)
+    mar = datetime(d.year, 3, 1)
+    nov = datetime(d.year, 11, 1)
+    start = datetime(d.year, 3, 1 + (6 - mar.weekday()) % 7 + 7, 7)
+    end = datetime(d.year, 11, 1 + (6 - nov.weekday()) % 7, 6)
+    off = -4 if start <= d.replace(tzinfo=None) < end else -5
+    local = datetime.fromtimestamp(t / 1000.0 + off * 3600, tz=timezone.utc)
+    return local.strftime("%Y-%m-%dT%H:%M:%S") + "%+03d:00" % off
+
+
+def news(host, path):
+    kind, items = NEWS[host]
+    now = market().now
+    if kind == "forbidden":
+        return 403, "<html><body>Forbidden</body></html>"
+    if kind == "entity":
+        return 200, ('<?xml version="1.0"?><!DOCTYPE lolz [<!ENTITY lol "lol"><!ENTITY lol2 "&lol;&lol;&lol;">]>'
+                     '<rss version="2.0"><channel><title>&lol2;</title></channel></rss>')
+    if kind == "atom":
+        out = ['<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>%s</title>' % host]
+        for i, (mins, title, summary, cats) in enumerate(items):
+            t = now - mins * 60000
+            out.append('<entry><title type="html">%s</title><link rel="alternate" href="https://%s/story/%d"/>'
+                       '<id>tag:%s,2026:%d</id><published>%s</published><updated>%s</updated>'
+                       '<summary type="html">&lt;p&gt;%s&lt;/p&gt;</summary>%s</entry>' % (
+                           title, host, i, host, i, datetime.fromtimestamp(t / 1000.0, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                           datetime.fromtimestamp(t / 1000.0, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), summary,
+                           "".join('<category term="%s"/>' % c for c in cats)))
+        out.append("</feed>")
+        return 200, "".join(out)
+    out = ['<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" '
+           'xmlns:media="http://search.yahoo.com/mrss/"><channel><title>%s</title><link>https://%s/</link>'
+           '<description>synthetic test feed</description>' % (host, host)]
+    for i, (mins, title, summary, cats) in enumerate(items):
+        date = ("<pubDate>%s</pubDate>" % _rfc822(now - mins * 60000)) if mins is not None else ""
+        out.append('<item><title><![CDATA[%s]]></title><link>https://%s/story/%d</link>'
+                   '<media:content url="https://%s/img/%d.jpg" medium="image"/><guid isPermaLink="false">%s-%d</guid>%s'
+                   '<description><![CDATA[<p>%s</p>]]></description><dc:creator>Test Writer</dc:creator>%s</item>' % (
+                       title, host, i, host, i, host, i, date, summary,
+                       "".join("<category><![CDATA[%s]]></category>" % c for c in cats)))
+    out.append("</channel></rss>")
+    return 200, "".join(out)
+
+
+def announcements(q):
+    now = market().now
+    kind = q.get("type")
+    rows = []
+    if kind == "delistings":
+        rows.append({"title": "Delisting of THINXUSDT Perpetual Contract", "description": "Synthetic test notice.",
+                     "type": {"title": "Delistings", "key": "delistings"}, "tags": ["Derivatives", "Delistings"],
+                     "url": "https://announcements.bybit.com/en/article/delisting-thinxusdt", "dateTimestamp": now - 2 * 3600000,
+                     "startDateTimestamp": now - 2 * 3600000, "endDateTimestamp": now + 5 * DAY, "publishTime": now - 2 * 3600000})
+    if kind == "new_crypto":
+        rows.append({"title": "New Listing: NEWXUSDT Perpetual Contract, with up to 25x leverage", "description": "Synthetic.",
+                     "type": {"title": "New Listings", "key": "new_crypto"}, "tags": ["Derivatives"],
+                     "url": "https://announcements.bybit.com/en/article/new-listing-newxusdt", "dateTimestamp": now - 5 * 3600000,
+                     "startDateTimestamp": now - 5 * 3600000, "endDateTimestamp": now + 30 * DAY})
+        rows.append({"title": "Old listing", "description": "", "type": {"title": "New Listings", "key": "new_crypto"},
+                     "tags": [], "url": "", "dateTimestamp": now - 20 * DAY})
+    return bybit_ok({"total": len(rows), "list": rows})
+
+
+def calendar():
+    now = int(datetime(2026, 10, 21, 15, 15, tzinfo=timezone.utc).timestamp() * 1000)   # fixed times, like a real week
+    ev = [("CPI m/m", "USD", 165, "High", "0.3%", "0.4%"), ("FOMC Statement", "USD", 27 * 60, "High", "", ""),
+          ("Unemployment Claims", "USD", 20 * 60, "Medium", "221K", "218K"), ("ECB Press Conference", "EUR", 300, "High", "", ""),
+          ("Core PCE Price Index m/m", "USD", -180, "High", "0.2%", "0.3%"), ("Bank Holiday", "JPY", 600, "Holiday", "", "")]
+    return [{"title": t, "country": c, "date": _ny_iso(now + mins * 60000), "impact": imp, "forecast": f, "previous": pv}
+            for t, c, mins, imp, f, pv in ev]
+
+
+# ---------------------------------------------------------------- Hyperliquid wallets and the leaderboard
+# Synthetic traders. Times are fixed (minutes from Wednesday 2026-10-21 15:15 UTC) so a wallet's book is
+# the same whatever 'now' a test pins, except for the trades it opens or closes at a set time.
+
+WED_MS = int(datetime(2026, 10, 21, 15, 15, tzinfo=timezone.utc).timestamp() * 1000)
+
+
+def whale_address(i):
+    return "0x" + ("%040x" % (0x5eed000000 + i * 104729))
+
+
+# (index, display name, account USD, (day, week, month, all-time) pnl, month roi,
+#  positions: (coin, +1 long / -1 short, notional USD, leverage, margin type, from minute, until minute))
+WHALES = [
+    (1, "steady-eddie", 8.2e6, (12e3, 210e3, 1.42e6, 9.8e6), 0.21,
+     [("BTC", 1, 4.1e6, 5, "cross", None, None), ("ETH", 1, 1.2e6, 3, "cross", None, None)]),
+    (2, None, 3.4e6, (-40e3, 95e3, 1.1e6, 2.2e6), 0.48,
+     [("BTC", -1, 2.0e6, 10, "isolated", None, None), ("SOL", 1, 6.0e5, 5, "isolated", None, None)]),
+    (3, "night-owl", 1.9e6, (8e3, -20e3, 9.0e5, 3.1e6), 0.61,
+     [("BTC", 1, 9.0e5, 4, "cross", None, None), ("ETH", -1, 3.0e5, 3, "cross", None, 105),
+      ("SOL", 1, 4.0e5, 5, "cross", 45, None)]),
+    (4, "bonk-lord", 7.5e5, (3e3, 30e3, 4.2e5, 6.0e5), 1.10,
+     [("BONK", 1, 2.2e5, 3, "isolated", None, None), ("xyz:XYZ100", 1, 1.0e5, 2, "isolated", None, None)]),
+    (5, None, 2.6e5, (1e3, 12e3, 1.5e5, 9.0e4), 0.70,
+     [("BTC", 1, 1.5e5, 20, "isolated", None, None)]),
+    (6, "too-small", 4.0e4, (2e3, 9e3, 9.0e4, 1.0e5), 2.40, [("BTC", -1, 1.0e5, 3, "cross", None, None)]),
+    (7, "flat-month", 5.0e6, (-1e5, -2e5, -3.0e5, 4.0e6), -0.05, [("ETH", -1, 2.0e6, 2, "cross", None, None)]),
+]
+
+
+def whale_positions(i, now):
+    spec = [w for w in WHALES if w[0] == i]
+    if not spec:
+        return []
+    out = []
+    for coin, sg, usd, lev, mode, t0, t1 in spec[0][5]:
+        if t0 is not None and now < WED_MS + t0 * 60000:
+            continue
+        if t1 is not None and now >= WED_MS + t1 * 60000:
+            continue
+        if ":" in coin:
+            px = 25.0
+        else:
+            px = last_price(coin) * mult(coin)
+        entry = px * (1 - sg * 0.02)
+        size = usd / px
+        out.append({"type": "oneWay", "position": {
+            "coin": coin if ":" in coin else hl_symbol(coin), "szi": "%.5f" % (sg * size), "entryPx": _fmt(entry),
+            "positionValue": "%.2f" % (size * px), "unrealizedPnl": "%.2f" % (sg * (px - entry) * size),
+            "returnOnEquity": "%.4f" % (sg * (px - entry) / entry * lev), "liquidationPx": _fmt(entry * (1 - sg * 0.8 / lev)),
+            "leverage": {"type": mode, "value": lev, "rawUsd": "%.2f" % (-sg * size * entry)}, "marginUsed": "%.2f" % (usd / lev),
+            "maxLeverage": 40, "cumFunding": {"allTime": "12.5", "sinceChange": "1.2", "sinceOpen": "3.4"}}})
+    return out
+
+
+def leaderboard():
+    rows = []
+    for i, name, acct, pnl, roi, _ in WHALES:
+        rows.append({"ethAddress": whale_address(i), "accountValue": "%.2f" % acct, "displayName": name, "prize": 0,
+                     "windowPerformances": [[w, {"pnl": "%.2f" % v, "roi": "%.4f" % (roi * v / pnl[2] if pnl[2] else 0),
+                                                 "vlm": "%.2f" % (abs(v) * 40)}] for w, v in zip(("day", "week", "month", "allTime"), pnl)]})
+    for k in range(40):                                       # a crowd of smaller winners and losers
+        v = ((k * 7919) % 200 - 80) * 1000.0
+        rows.append({"ethAddress": whale_address(100 + k), "accountValue": "%.2f" % (20000 + k * 3000), "displayName": None,
+                     "prize": 0, "windowPerformances": [["day", {"pnl": "0", "roi": "0", "vlm": "0"}],
+                                                        ["week", {"pnl": "%.2f" % (v / 4), "roi": "0.01", "vlm": "1"}],
+                                                        ["month", {"pnl": "%.2f" % v, "roi": "0.02", "vlm": "1"}],
+                                                        ["allTime", {"pnl": "%.2f" % (v * 2), "roi": "0.05", "vlm": "1"}]]})
+    rows.append({"ethAddress": "not-an-address", "accountValue": "1e9", "windowPerformances": []})
+    rows.append({"ethAddress": whale_address(900), "accountValue": "NaN", "windowPerformances": []})
+    rows.append({"ethAddress": whale_address(901), "accountValue": "5000000", "windowPerformances": "broken"})
+    rows.append("not even a row")
+    return {"leaderboardRows": rows}
+
+
+def whale_fills(i, start, now):
+    fills = []
+    for k, (coin, sg, usd, lev, mode, t0, t1) in enumerate([w for w in WHALES if w[0] == i][0][5] if any(w[0] == i for w in WHALES) else []):
+        if ":" in coin:
+            continue
+        for t, d, pnl in ((t0, "Open Long" if sg > 0 else "Open Short", "0.0"),
+                          (t1, "Close Long" if sg > 0 else "Close Short", "15230.5")):
+            if t is None:
+                continue
+            at = WED_MS + t * 60000
+            if start <= at <= now:
+                px = last_price(coin) * mult(coin)
+                fills.append({"coin": hl_symbol(coin), "px": _fmt(px), "sz": "%.4f" % (usd / px), "side": "B" if (sg > 0) == d.startswith("Open") else "A",
+                              "time": at, "startPosition": "0", "dir": d, "closedPnl": pnl, "hash": "0x" + "ab" * 32,
+                              "oid": 1000 + k, "crossed": True, "fee": "%.4f" % (usd * 0.00045), "tid": 5000 + k, "feeToken": "USDC"})
+    return fills
+
+
 # ---------------------------------------------------------------- the transport cryptocore calls
 
 def handle(method, url, data, headers):
@@ -832,12 +1089,28 @@ def handle(method, url, data, headers):
         return 429, {"Retry-After": "0"}, json.dumps({"code": -1003, "msg": "Too many requests"})
     if first and "timeout" in modes:
         raise socket.timeout("timed out")
-    if host == "fapi.binance.com":
+    if fake_accounts.is_private(host, path):
+        st = fake_accounts.state()
+        lose = st.get("lose_reply") if method == "POST" and path in ("/fapi/v1/order", "/v5/order/create") else None
+        if lose == "before":
+            st["lose_reply"] = None
+            raise socket.timeout("timed out")
+        res = fake_accounts.handle(method, host, path, u.query, data, headers, market())
+        if lose == "after":
+            st["lose_reply"] = None
+            raise socket.timeout("timed out")
+    elif host == "fapi.binance.com":
         res = binance(path, q)
     elif host == "api.bybit.com":
         res = bybit(path, q)
     elif host == "api.alternative.me":
         res = fear_greed(q)
+    elif host in NEWS:
+        res = news(host, path)
+    elif host == "nfs.faireconomy.media":
+        res = calendar()
+    elif host == "stats-data.hyperliquid.xyz" and path == "/Mainnet/leaderboard":
+        res = leaderboard()
     elif host == "api.hyperliquid.xyz" and path == "/info":
         res = hyperliquid(json.loads((data or b"{}").decode("utf-8")))
     else:

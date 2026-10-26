@@ -96,15 +96,14 @@ class Gate(unittest.TestCase):
             self.assertBlocked(r, "short")
 
     def test_price_moved(self):
-        with Session(now="2026-10-21 15:15") as s:
-            ready(s, "ORBX")
-        with Session(now="2026-10-21 15:15") as s:
-            ready(s, "ORBX")
-            import os
-            os.environ["FAKE_NOW"] = "2026-10-21 16:00"
-            os.environ["CRYPTO_NOW"] = "2026-10-21 16:00"
-            cc.set_now("2026-10-21 16:00")
-            code, out, err, r = check(s, "--now", "2026-10-21 16:00")
+        with Session() as s:
+            ready(s, "SOL")
+            o = cc.read_json(s.path("orders.json"))["orders"][0]
+            risk = o["entry"] - o["stop"]
+            # an order planned when the price was 0.8R lower, same stop: the price has run since
+            edit(s, entry=cc.round_to_tick(o["entry"] - 0.8 * risk, o["tick"]), stop=cc.round_to_tick(o["stop"] - 0.8 * risk, o["tick"]),
+                 target=cc.round_to_tick(o["target"] - 0.8 * risk, o["tick"]))
+            code, out, err, r = check(s)
             self.assertBlocked(r, "moved")
             self.assertIn("(the price now)", out)
 
@@ -144,12 +143,13 @@ class Gate(unittest.TestCase):
             self.assertIn("or less passes", " ".join(r["reasons"]))
 
     def test_liquidity(self):
-        with Session(config={"min_quote_volume_usd": 8e9}) as s:      # SOL trades about $1.8B: under a quarter
+        with Session() as s:
+            vol = cc.get_venue("binance").ticker("SOLUSDT")["quote_volume"]
             ready(s)
+            cc.write_json(s.path("config.json"), {"min_quote_volume_usd": vol * 5})     # volume is under a quarter
             code, out, err, r = check(s)
             self.assertBlocked(r, "liquidity")
-        with Session(config={"min_quote_volume_usd": 2e9}) as s:      # under the floor, over a quarter: a warning
-            ready(s)
+            cc.write_json(s.path("config.json"), {"min_quote_volume_usd": vol * 2})     # under the floor, over a quarter
             code, out, err, r = check(s)
             self.assertEqual(r["verdict"], "PASS")
             self.assertIn("thin:", " ".join(r["warnings"]))

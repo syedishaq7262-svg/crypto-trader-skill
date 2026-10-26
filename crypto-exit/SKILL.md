@@ -48,6 +48,7 @@ Flags: `--side long|short` (taken from the hit when there is one),
 
 | file | what |
 | --- | --- |
+| `crypto/entry.json` | a trigger from `/crypto-entry`, used first while it is under an hour old |
 | `crypto/watchlist.json` | the scanner's hits: setup, side, trigger, the setup's stop reference, the scan's thresholds |
 | exchange data | 5-minute and 1-hour candles (ATR, swings), the ticker (price, funding), the order book (slippage) |
 | `crypto/config.json` | `min_reward_risk` (default target), `max_hold_hours` (24), fees and `slippage_bps` (null = measured) |
@@ -57,14 +58,14 @@ Flags: `--side long|short` (taken from the hit when there is one),
 
 | entry | price |
 | --- | --- |
-| `auto` (default) | the scanner's trigger if it fired in the last 10 minutes, otherwise the price now |
+| `auto` (default) | the trigger if it fired in the last 10 minutes, otherwise the price now |
 | `trigger` | the trigger price, even if older (it warns when the price has moved) |
 | `market` | the price now |
 | a price | a resting order at that price, which may never fill |
 
 | stop | where it goes |
 | --- | --- |
-| `setup` (default with a hit) | the setup's invalidation: the opening-range midpoint (orb), one 15-minute ATR back inside the broken level (breakout), the pullback's extreme (trend), the 6-hour extreme (reversal), the spike bar's far end (volume) |
+| `setup` (default with a hit) | the setup's invalidation: the opening-range midpoint (orb), one 15-minute ATR back inside the broken level (breakout), the pullback's extreme (trend), the 6-hour extreme (reversal), the spike bar's far end (volume), the middle band (squeeze break) |
 | `range` | the far side of the opening range (wider) |
 | `atr:K` | K x the 14-bar ATR of 15-minute candles (default `atr:1.5` without a hit) |
 | `pct:X` | X percent from the entry |

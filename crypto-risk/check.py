@@ -120,7 +120,7 @@ def check_order(o, cfg, ctx, venue, m, t, plan, tm):
         if target is not None and sg * (target - meas) > 0:
             rr = abs(target - meas) / risk
             facts["reward_risk"] = rr
-            if rr + EPS < float(cfg.get("min_reward_risk") or 0):
+            if round(rr, 2) < float(cfg.get("min_reward_risk") or 0):      # judged as shown: 1.50 is never under 1.5
                 reasons.append("reward:risk: %.2f from the price now, under your %g minimum" % (rr, cfg["min_reward_risk"]))
         # daily loss: today's net loss so far, the risk still open, and this one
         day_loss = max(0.0, -ctx["realized"])
@@ -285,7 +285,10 @@ def print_results(results, cfg, stats):
             if facts.get("reward_risk") is not None:
                 bits.append("reward:risk %.2f (min %g)" % (facts["reward_risk"], float(cfg.get("min_reward_risk") or 0)))
             if facts.get("liq"):
-                bits.append("liquidation %s, %.1fx the stop distance" % (P(facts["liq"]["price"]), facts["liq"]["buffer"] or 0))
+                if (facts["liq"]["price"] or 0) <= 0:
+                    bits.append("no liquidation price above zero")
+                else:
+                    bits.append("liquidation %s, %.1fx the stop distance" % (P(facts["liq"]["price"]), facts["liq"]["buffer"] or 0))
             if bits:
                 cc.out("          " + ", ".join(bits))
             d = facts.get("day")

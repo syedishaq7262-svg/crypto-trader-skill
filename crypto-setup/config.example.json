@@ -38,5 +38,8 @@
 
   "_orders": "paper true simulates fills at live prices against the real order book. Live orders need paper false, your own keys in environment variables, a PASS from crypto-risk and your typed yes.",
   "paper": true,
-  "live_venue": "binance"
+  "live_venue": "binance",
+
+  "_news": "null: crypto-news reads its built-in outlets (CoinDesk, Cointelegraph, Decrypt, The Block, CryptoSlate, Bitcoin Magazine, BeInCrypto). Or a list of RSS or Atom feed URLs, or [name, url] pairs, to read instead.",
+  "news_feeds": null
 }

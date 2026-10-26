@@ -66,9 +66,9 @@ def px(m, p):
 def hit(x, setup, side, trigger, level, stop_ref, at_ms, rvol=None, status="new", metrics=None, note=""):
     m, t = x.m, x.t
     return {
-        "symbol": m["symbol"], "coin": m["coin"], "multiplier": m["multiplier"],
+        "symbol": m["symbol"], "coin": m["coin"], "multiplier": m["multiplier"], "tick": m.get("tick"),
         "setup": setup, "side": side, "status": status,
-        "trigger": px(m, trigger), "level": px(m, level), "stop_ref": px(m, stop_ref),
+        "trigger": px(m, trigger), "level": px(m, level), "stop_ref": px(m, stop_ref), "stop_ref_raw": stop_ref,
         "price": t.get("last"), "at": at_ms, "at_utc": cc.fmt_utc(at_ms),
         "rvol": round(rvol, 2) if rvol else None,
         "atr15_pct": round(x.atr15_pct, 5) if x.atr15_pct else None,
@@ -165,6 +165,41 @@ def setup_squeeze(x, a, sides):
     return [hit(x, "squeeze", "both", up[-1], mid[-1], None, x.b1h[-1][T] + 3600000, None, "coiled",
                 {"width_pct": round(cur, 5), "width_rank": round(rank, 4), "upper": px(x.m, up[-1]), "lower": px(x.m, lo[-1])},
                 "band width in the lowest %d%% of 30 days; a break of either band picks the side" % a.squeeze_pct)]
+
+
+def setup_squeeze_break(x, a, sides):
+    """The squeeze resolving: the first 1h close outside the bands after a squeeze in the 12 hours before.
+    crypto-entry times it and the Time Machine replays it; the stop reference is the middle band."""
+    c = cc.closes(x.b1h)
+    if len(c) < 250:
+        return []
+    mid, up, lo, wd = cc.bollinger(c, 20, 2.0)
+    hist = [w for w in wd[-721:-1] if w is not None]
+    if len(hist) < 200 or None in (up[-1], up[-2], lo[-1], lo[-2], mid[-1]):
+        return []
+    ranks = [cc.pct_rank(w, hist) for w in wd[-13:-1] if w is not None]
+    if not ranks or min(ranks) > a.squeeze_pct / 100.0:
+        return []
+    last = x.b1h[-1]
+    out = []
+    for side in sides:
+        if side == "long" and c[-1] > up[-1] and c[-2] <= up[-2]:
+            level = up[-1]
+        elif side == "short" and c[-1] < lo[-1] and c[-2] >= lo[-2]:
+            level = lo[-1]
+        else:
+            continue
+        out.append(hit(x, "squeeze", side, c[-1], level, mid[-1], last[T] + 3600000, None,
+                       "broke up" if side == "long" else "broke down",
+                       {"upper": px(x.m, up[-1]), "lower": px(x.m, lo[-1]), "mid": px(x.m, mid[-1]),
+                        "width_rank": round(min(ranks), 4)},
+                       "first 1h close %s the band after a squeeze" % ("above" if side == "long" else "below")))
+    return out
+
+
+def setup_squeeze_any(x, a, sides):
+    """Coiled now (no side yet), or the first close out of a squeeze (a side): what the scan reports."""
+    return setup_squeeze(x, a, sides) + setup_squeeze_break(x, a, sides)
 
 
 def setup_trend(x, a, sides):
@@ -302,7 +337,7 @@ def args_from(params=None):
     return a
 
 
-SETUP_FUNCS = {"orb": setup_orb, "breakout": setup_breakout, "squeeze": setup_squeeze, "trend": setup_trend,
+SETUP_FUNCS = {"orb": setup_orb, "breakout": setup_breakout, "squeeze": setup_squeeze_any, "trend": setup_trend,
                "reversal": setup_reversal, "volume": setup_volume}
 
 
@@ -345,6 +380,20 @@ def do_universe(a, venue, cfg):
 
 
 def scan(a, venue, cfg):
+    data = compute(a, venue, cfg)
+    if not a.no_write:
+        cc.write_json(cc.wpath("watchlist.json"), data)
+    if a.json:
+        cc.dump(data)
+    else:
+        print_scan(data, venue, a)
+    if a.stats:
+        cc.out("Requests: " + cc.HTTP.summary())
+    return 0 if data["hits"] else 1
+
+
+def compute(a, venue, cfg):
+    """Run the scan and return the watchlist dict (nothing printed, nothing written)."""
     setups = parse_setups(a.setups)
     sides = ["long", "short"] if a.side == "both" else [a.side]
     if not cfg.get("allow_short", True) and "short" in sides and a.side == "both":
@@ -373,11 +422,16 @@ def scan(a, venue, cfg):
         m, t = item
         b5 = venue.bars(m["symbol"], "5m", 900) if need5 else []
         b1h = venue.bars(m["symbol"], "1h", n1h) if need1h else []
+        if not m.get("listed_ms") and ((need5 and len(b5) < 900 * 0.95) or (need1h and len(b1h) < n1h * 0.95)):
+            return None                      # less history than asked for: a new listing
         return Ctx(m, t, b5, b1h)
 
     workers = a.workers or (2 if venue.name == "hyperliquid" else 8)
     results = cc.parallel(fetch, universe, workers=workers)
     ctxs = [r for _, r, e in results if e is None and r is not None]
+    young = [item for item, r, e in results if e is None and r is None]
+    if young:
+        why["listed recently"] = why.get("listed recently", 0) + len(young)
     failed = [{"symbol": item[0]["symbol"], "error": str(e)} for item, r, e in results if e is not None]
     hits = []
     for x in ctxs:
@@ -409,20 +463,12 @@ def scan(a, venue, cfg):
         "setups": setups, "sides": sides, "universe": len(universe), "scanned": len(ctxs),
         "left_out": why, "failed": failed, "notes": notes, "hits": hits,
     }
-    if not a.no_write:
-        cc.write_json(cc.wpath("watchlist.json"), data)
-    if a.json:
-        cc.dump(data)
-    else:
-        print_scan(data, venue, a)
-    if a.stats:
-        cc.out("Requests: " + cc.HTTP.summary())
-    return 0 if hits else 1
+    return data
 
 
 def _lvl(h, key):
     v = h.get(key)
-    return cc.fmt_price(v) if v is not None else "-"
+    return cc.fmt_price(v, h.get("tick")) if v is not None else "-"
 
 
 def print_scan(d, venue, a):
@@ -456,29 +502,38 @@ def print_scan(d, venue, a):
                 cc.out("  Broke out, then fell back inside: " + ", ".join("%s %s" % (h["coin"], h["side"]) for h in failed_orb))
             continue
         if s == "orb":
-            tab = [[h["coin"], h["side"], "%s to %s" % (cc.fmt_price(h["metrics"]["or_low"]), cc.fmt_price(h["metrics"]["or_high"])),
-                    "%s @ %s" % (cc.fmt_price(h["trigger"]), cc.fmt_utc(h["at"], date=False)), cc.fmt_price(h["price"]),
+            fp = lambda h, v: cc.fmt_price(v, h.get("tick"))
+            tab = [[h["coin"], h["side"], "%s to %s" % (fp(h, h["metrics"]["or_low"]), fp(h, h["metrics"]["or_high"])),
+                    "%s @ %s" % (fp(h, h["trigger"]), cc.fmt_utc(h["at"], date=False)), fp(h, h["price"]),
                     "%.1fx" % h["rvol"] if h["rvol"] else "-", h["status"]] for h in show]
             cc.out(cc.table(tab, ["coin", "side", "range", "trigger (5m close)", "now", "rvol", "status"], "lllrrrl"))
         elif s == "breakout":
-            tab = [[h["coin"], h["side"], _lvl(h, "level"), cc.fmt_price(h["trigger"]),
+            tab = [[h["coin"], h["side"], _lvl(h, "level"), cc.fmt_price(h["trigger"], h.get("tick")),
                     cc.fmt_pct(h["metrics"]["beyond_pct"]), "%.1fx" % h["rvol"], h["status"]] for h in show]
             cc.out(cc.table(tab, ["coin", "side", "level", "15m close", "beyond", "rvol", "status"], "llrrrrl"))
         elif s == "squeeze":
-            tab = [[h["coin"], cc.fmt_pct(h["metrics"]["width_pct"], plus=False), "%d%%" % round(h["metrics"]["width_rank"] * 100),
-                    cc.fmt_price(h["metrics"]["lower"]), cc.fmt_price(h["metrics"]["upper"])] for h in show]
-            cc.out(cc.table(tab, ["coin", "band width", "rank (30d)", "lower band", "upper band"], "lrrrr"))
+            coiled = [h for h in show if h["side"] == "both"]
+            broke = [h for h in show if h["side"] != "both"]
+            if coiled:
+                tab = [[h["coin"], cc.fmt_pct(h["metrics"]["width_pct"], plus=False), "%d%%" % round(h["metrics"]["width_rank"] * 100),
+                        cc.fmt_price(h["metrics"]["lower"], h.get("tick")), cc.fmt_price(h["metrics"]["upper"], h.get("tick"))] for h in coiled]
+                cc.out(cc.table(tab, ["coin", "band width", "rank (30d)", "lower band", "upper band"], "lrrrr"))
+            if broke:
+                cc.out("  Broke out of a squeeze (first 1h close outside the bands):")
+                tab = [[h["coin"], h["side"], "%s @ %s" % (cc.fmt_price(h["trigger"], h.get("tick")), cc.fmt_utc(h["at"], date=False)),
+                        _lvl(h, "level"), _lvl(h, "stop_ref")] for h in broke]
+                cc.out(cc.table(tab, ["coin", "side", "1h close", "band", "middle band"], "llrrr"))
         elif s == "trend":
-            tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"]), _lvl(h, "level"), _lvl(h, "stop_ref"),
+            tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"], h.get("tick")), _lvl(h, "level"), _lvl(h, "stop_ref"),
                     cc.fmt_pct(h["metrics"]["pullback_pct"], plus=False)] for h in show]
             cc.out(cc.table(tab, ["coin", "side", "15m close", "15m EMA20", "pullback extreme", "pullback"], "llrrrr"))
         elif s == "reversal":
-            tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"]),
+            tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"], h.get("tick")),
                     "%.0f -> %.0f" % (h["metrics"].get("rsi_min", h["metrics"].get("rsi_max")), h["metrics"]["rsi_now"]),
                     cc.fmt_pct(h["metrics"]["move_24h"]), _lvl(h, "stop_ref")] for h in show]
             cc.out(cc.table(tab, ["coin", "side", "1h close", "RSI", "24h", "6h extreme"], "llrrrr"))
         elif s == "volume":
-            tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"]), cc.fmt_pct(h["metrics"]["move_pct"]),
+            tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"], h.get("tick")), cc.fmt_pct(h["metrics"]["move_pct"]),
                     "%.1fx" % h["rvol"], "%.1f ATR" % h["metrics"]["move_atr"]] for h in show]
             cc.out(cc.table(tab, ["coin", "side", "15m close", "move", "rvol", "size"], "llrrrr"))
         elif s == "rs":

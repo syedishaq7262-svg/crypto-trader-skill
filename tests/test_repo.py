@@ -77,8 +77,8 @@ class Repo(unittest.TestCase):
     def test_standard_library_only(self):
         import sys
         allowed = set(getattr(sys, "stdlib_module_names", ())) | set((
-            "argparse ast base64 bisect collections concurrent contextlib datetime gzip hashlib hmac importlib io json "
-            "math os platform random re shutil socket ssl statistics sys tempfile threading time urllib uuid zipfile").split())
+            "argparse ast base64 bisect collections concurrent contextlib datetime email gzip hashlib hmac html importlib io json "
+            "math os platform random re shutil socket ssl statistics sys tempfile threading time urllib uuid xml zipfile").split())
         allowed.add("cryptocore")
         for s in SKILLS:
             folder = os.path.join(ROOT, s)
@@ -103,6 +103,17 @@ class Repo(unittest.TestCase):
                 continue
             with open(path, encoding="utf-8", errors="replace") as fh:
                 self.assertNotIn(chr(0x2014), fh.read(), rel)
+
+    def test_no_invisible_characters(self):
+        bad = (chr(0xFEFF), chr(0x200B), chr(0x200C), chr(0x200D), chr(0x2060), chr(0x00A0))
+        for path in text_files():
+            rel = os.path.relpath(path, ROOT)
+            if rel.startswith(os.path.join("tests", "fixtures")):
+                continue
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+            for ch in bad:
+                self.assertNotIn(ch, text, "%s has an invisible character U+%04X" % (rel, ord(ch)))
 
     def test_safe_defaults_ship_in_the_example_config(self):
         with open(os.path.join(ROOT, "crypto-setup", "config.example.json")) as fh:

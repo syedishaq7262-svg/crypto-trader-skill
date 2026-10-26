@@ -89,10 +89,13 @@ in 5-minute bars), `--window 2` (time-of-day match, +/- bars),
    moved over the risk less costs. Funding paid or received is included.
 5. **The history.** The scanner's own code runs on each past moment of the
    pool: every day's session for an opening range, every 15-minute bar for a
-   breakout, trend or volume spike, every hour for a reversal. The plan's
+   breakout, trend or volume spike, every hour for a reversal or a squeeze
+   break. The plan's
    stop rule (in volatility terms when it was a one-off price) and target R
    are applied, one trade at a time, on the real bars, with the real funding.
-   Squeeze and relative-strength plans have no fixed entry rule to re-run.
+   Relative-strength plans and your own levels have no fixed entry rule to
+   re-run; a plan made while a squeeze is still coiled is told that the rule
+   only trades the break.
 6. **The edge test.** For each historical trade, 100 random entries at the
    same time of day (+/- 10 minutes) with the same stop distance in 5-minute
    ATRs and the same target R. Then 2,000 pseudo-histories, each built from

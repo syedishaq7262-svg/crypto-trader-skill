@@ -32,7 +32,7 @@ FRESH_MS = 10 * MIN
 
 SETUP_NAMES = {
     "orb": "opening-range breakout", "breakout": "range breakout", "squeeze": "squeeze", "trend": "trend pullback",
-    "reversal": "RSI reversal", "volume": "volume spike", "rs": "relative strength",
+    "reversal": "RSI reversal", "volume": "volume spike", "rs": "relative strength", "level": "your level",
 }
 SETUP_STOP_WORDS = {
     "orb": "the opening-range midpoint",
@@ -40,6 +40,7 @@ SETUP_STOP_WORDS = {
     "trend": "the pullback's extreme",
     "reversal": "the 6-hour extreme",
     "volume": "the far end of the spike bar",
+    "squeeze": "the middle band (the 20-hour average)",
 }
 
 
@@ -64,7 +65,8 @@ def find_hit(watch, coin, setup=None, side=None):
     if not hits:
         return None
     rank = {"holding": 0, "fresh": 0, "reclaimed": 1, "rejected": 1, "spike": 1, "turning up": 1, "turning down": 1,
-            "leader": 2, "laggard": 2, "coiled": 3, "extended": 4, "back inside": 5}
+            "leader": 2, "laggard": 2, "broke up": 1, "broke down": 1, "coiled": 3, "extended": 4,
+            "back inside": 5}
     hits.sort(key=lambda h: (rank.get(h.get("status"), 3), -(h.get("at") or 0)))
     return hits[0]
 
@@ -102,7 +104,7 @@ def make_stop(spec, side, entry, hit, a15, b1h, m):
     if spec == "setup":
         if not hit or hit.get("stop_ref") is None:
             raise cc.CryptoError("this plan has no setup stop to lean on. Use --stop atr:1.5, pct:2, swing or a price.")
-        ref = hit["stop_ref"]
+        ref = hit["stop_ref_raw"] if hit.get("stop_ref_raw") is not None else hit["stop_ref"]
         words = "setup: " + SETUP_STOP_WORDS.get(hit["setup"], "the setup's invalidation level")
         if hit["setup"] == "orb":
             mt = hit.get("metrics") or {}
@@ -166,32 +168,69 @@ def tick_round(p, m, mode="nearest"):
     return float("%.6g" % p)
 
 
+def entry_hit(coin):
+    """A fresh trigger from crypto-entry (crypto/entry.json) for this coin, or None."""
+    e = cc.read_json(cc.wpath("entry.json"), None)
+    if not e or not e.get("hit"):
+        return None
+    h = e["hit"]
+    if h.get("coin") != cc.clean_coin(coin) and h.get("symbol") != str(coin).upper():
+        return None
+    if cc.now_ms() - (h.get("at") or 0) > 60 * MIN:
+        return None
+    return e
+
+
 def plan_cmd(a, cfg):
-    watch = cc.read_json(cc.wpath("watchlist.json"), None)
-    hit = None
-    if not a.manual and watch and (a.venue is None or watch.get("venue") == a.venue):
-        hit = find_hit(watch, a.coin, a.setup, a.side)
+    hit, params, venue_name, scanned_at = None, None, None, None
+    if not a.manual:
+        e = entry_hit(a.coin)
+        if e and (a.venue is None or e.get("venue") == a.venue) and (not a.setup or e["hit"].get("setup") == a.setup):
+            hit, params, venue_name, scanned_at = e["hit"], e.get("params"), e.get("venue"), e.get("as_of")
+        if hit is None:
+            watch = cc.read_json(cc.wpath("watchlist.json"), None)
+            if watch and (a.venue is None or watch.get("venue") == a.venue):
+                hit = find_hit(watch, a.coin, a.setup, a.side)
+                if hit is not None:
+                    params = watch.get("params") or {"session": watch.get("session"), "or_minutes": watch.get("or_minutes")}
+                    venue_name, scanned_at = watch.get("venue"), watch.get("as_of")
         if hit is None and a.setup:
             raise cc.CryptoError("the watchlist has no %s hit on %s. Run /crypto-scanner or plan it by hand with --manual."
                                  % (a.setup, cc.clean_coin(a.coin)))
-    venue = cc.VENUES[watch["venue"]]() if hit else cc.get_venue(a.venue)
+    venue = cc.VENUES[venue_name]() if hit else cc.get_venue(a.venue)
     m = venue.market(hit["symbol"] if hit else a.coin)
-    sym = m["symbol"]
     side = a.side or (hit["side"] if hit and hit.get("side") in cc.SIDES else None)
     if side is None:
         raise cc.CryptoError("which side? Add --side long or --side short%s." %
                              (" (a squeeze has no side until a band breaks)" if hit and hit.get("setup") == "squeeze" else ""))
+    plan, entry_words = build_plan(venue, m, side, cfg, hit=hit, params=params, scanned_at=scanned_at,
+                                   entry=a.entry, stop=a.stop, target=a.target, hold=a.hold)
+    if not a.no_write:
+        cc.write_json(cc.wpath("plan.json"), plan)
+    if a.json:
+        cc.dump(plan)
+    else:
+        print_plan(plan, entry_words, cfg)
+    return 0
+
+
+def build_plan(venue, m, side, cfg, hit=None, params=None, scanned_at=None, entry=None, stop=None, target=None,
+               hold=None, data=None):
+    """The plan as a dict, plus a few words on where the entry came from. data, when given, is
+    (ticker, 5m bars, 15m bars, 1h bars, 15m ATR, 1h ATR) already fetched (crypto-scout passes it)."""
+    sym = m["symbol"]
     if side == "short" and not cfg.get("allow_short", True):
         raise cc.CryptoError("shorts are off in your config (allow_short is false)")
     sg = cc.side_sign(side)
-    t, b5, b15, b1h, a15, a1h = market_data(venue, sym)
+    t, b5, b15, b1h, a15, a1h = data if data is not None else market_data(venue, sym)
     last = t["last"]
     now = cc.now_ms()
     grid = (now // cc.STEP5) * cc.STEP5
     warnings = []
 
     # entry
-    spec = (a.entry or "auto").lower()
+    entry_arg = entry
+    spec = (entry or "auto").lower()
     if spec == "auto":
         spec = "trigger" if (hit and hit.get("trigger") and now - hit["at"] <= FRESH_MS) else "market"
     if spec == "trigger":
@@ -210,13 +249,13 @@ def plan_cmd(a, cfg):
     else:
         v = number(spec)
         if not v:
-            raise cc.CryptoError("unknown entry %r. Use auto, trigger, market or a price." % a.entry)
+            raise cc.CryptoError("unknown entry %r. Use auto, trigger, market or a price." % entry_arg)
         entry, entry_time, entry_rule = v, grid, "price"
         entry_words = "your price (a resting order that may never fill)"
     entry = tick_round(entry, m)
 
     # stop
-    stop_spec = a.stop or ("setup" if hit and hit.get("stop_ref") is not None else "atr:1.5")
+    stop_spec = stop or ("setup" if hit and hit.get("stop_ref") is not None else "atr:1.5")
     raw_stop, stop_words = make_stop(stop_spec, side, entry, hit, a15, b1h, m)
     stop = tick_round(raw_stop, m, "down" if side == "long" else "up")
     if sg * (entry - stop) <= 0:
@@ -229,7 +268,7 @@ def plan_cmd(a, cfg):
                              % cc.fmt_pct(risk / entry, 3, False))
 
     # target
-    target_spec = a.target or ("%gR" % max(2.0, float(cfg.get("min_reward_risk") or 0)))
+    target_spec = target or ("%gR" % max(2.0, float(cfg.get("min_reward_risk") or 0)))
     raw_target, target_words = make_target(target_spec, side, entry, risk, a15, b1h, m)
     target = tick_round(raw_target, m)
     if sg * (target - entry) <= 0:
@@ -240,7 +279,7 @@ def plan_cmd(a, cfg):
         raise cc.CryptoError("the target is only %.2fR away" % target_r)
 
     # hold and time
-    hold_h = cc.parse_hold(a.hold, float(cfg.get("max_hold_hours") or 24))
+    hold_h = cc.parse_hold(hold, float(cfg.get("max_hold_hours") or 24))
     exit_by = entry_time + int(hold_h * cc.HOUR_MS)
 
     # costs and funding
@@ -281,7 +320,7 @@ def plan_cmd(a, cfg):
     if piv is not None and sg * (target - piv) > 0 and sg * (piv - entry) > 0 and target_spec != "level":
         warnings.append("A 1-hour swing %s at %s sits between the entry and the target." %
                         ("high" if side == "long" else "low", cc.fmt_price(piv, m.get("tick"))))
-    if target_r < float(cfg.get("min_reward_risk") or 0):
+    if round(target_r, 2) < float(cfg.get("min_reward_risk") or 0):
         warnings.append("Reward:risk %.2f is under your %g minimum: crypto-risk will block it." % (target_r, cfg["min_reward_risk"]))
     if hit and hit.get("status") in ("back inside", "extended"):
         warnings.append("The setup is %s." % hit["status"])
@@ -290,8 +329,7 @@ def plan_cmd(a, cfg):
     if hit:
         setup = {"name": hit["setup"], "status": hit.get("status"), "at": hit.get("at"), "trigger": hit.get("trigger"),
                  "level": hit.get("level"), "stop_ref": hit.get("stop_ref"), "metrics": hit.get("metrics") or {},
-                 "params": (watch.get("params") or {"session": watch.get("session"), "or_minutes": watch.get("or_minutes")}),
-                 "scanned_at": watch.get("as_of")}
+                 "params": params or {}, "scanned_at": scanned_at}
     plan = {
         "version": 1, "created_at": now, "venue": venue.name, "venue_label": venue.label,
         "symbol": sym, "coin": m["coin"], "multiplier": m["multiplier"], "tick": m.get("tick"), "step": m.get("step"),
@@ -308,13 +346,7 @@ def plan_cmd(a, cfg):
         "breakeven_share": breakeven, "warnings": warnings,
     }
     plan["plan_id"] = cc.plan_id(plan)
-    if not a.no_write:
-        cc.write_json(cc.wpath("plan.json"), plan)
-    if a.json:
-        cc.dump(plan)
-    else:
-        print_plan(plan, entry_words, cfg)
-    return 0
+    return plan, entry_words
 
 
 def print_plan(p, entry_words=None, cfg=None):

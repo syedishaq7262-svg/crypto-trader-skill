@@ -108,10 +108,11 @@ class At(unittest.TestCase):
 
     def test_with_a_stop_names_the_leverage_that_passes(self):
         with Session() as s:
+            px = cc.get_venue("binance").ticker("BTCUSDT")["last"]
             code, out, err = s.run("crypto-liquidation", "liq", ["at", "BTC", "--side", "short", "--leverage", "50",
-                                                                 "--stop", "68500", "--venue", "binance"])
+                                                                 "--stop", str(round(px * 1.0215, 1)), "--venue", "binance"])
             self.assertEqual(code, 0, err)
-            self.assertIn("Highest leverage that passes: 20x", out)
+            self.assertIn("Highest leverage that passes: 20x", out)       # a 2.15% stop allows 20x at a 2x buffer
 
     def test_instant_liquidation_is_refused(self):
         with Session() as s:

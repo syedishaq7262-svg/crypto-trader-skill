@@ -105,7 +105,7 @@ def check(a, cfg):
         P = lambda x: cc.fmt_price(x, o.get("tick"))
         cc.out("%-5s #%d %s %s %s @ %s, %dx %s" % (verdict, i, o["coin"], o["side"], cc.fmt_qty(o["qty"], o.get("step")),
                                                  P(o["entry"]), o["leverage"], o.get("margin_mode", "isolated")))
-        line = "      Estimated liquidation %s: %s away." % (P(r["liq"]), cc.fmt_pct(r["dist"], 1, False))
+        line = "      Estimated liquidation %s." % cc.fmt_liq(r["liq"], o["entry"], o.get("tick"))
         if r.get("stop") is not None:
             line += " The stop %s is %s away: liquidation is %.1fx further (need %gx)." % (
                 P(r["stop"]), cc.fmt_pct(r["stop_dist"], 2, False), r["buffer"], need)
@@ -184,12 +184,18 @@ def at(a, cfg):
         return 0
     cc.out("Liquidation | %s %s at %dx isolated | %s %s | %s" % (m["coin"], a.side, lev, venue.label.split(" ")[0], m["symbol"],
                                                                cc.fmt_utc(cc.now_ms())))
-    cc.out("Entry %s%s. Estimated liquidation %s: %s %s." % (P(entry), " (now)" if not a.entry else "", P(r["liq"]),
-                                                           cc.fmt_pct(r["dist"], 2, False), "below" if a.side == "long" else "above"))
+    if r["liq"] <= 0:
+        cc.out("Entry %s%s. At %dx a long has no liquidation price above zero: the margin covers a fall all the way down."
+               % (P(entry), " (now)" if not a.entry else "", lev))
+    else:
+        cc.out("Entry %s%s. Estimated liquidation %s: %s %s." % (P(entry), " (now)" if not a.entry else "", P(r["liq"]),
+                                                               cc.fmt_pct(r["dist"], 2, False), "below" if a.side == "long" else "above"))
     cc.out("Maintenance margin %s (%s). The exchange's own liquidation price is the one that counts." %
            (cc.fmt_pct(r["mmr"], 2, False), r["mmr_source"]))
-    cc.out("Last %d days, within %gh of any hourly close: a %s move against a %s happened %s. The worst was %s." %
-           (round(days), hold, cc.fmt_pct(r["dist"], 1, False), a.side, pct_words(r["p_liq"]), cc.fmt_pct(r["worst"] or 0, 1, False)))
+    if r["liq"] > 0:
+        cc.out("Last %d days, within %gh of any hourly close: a %s move against a %s happened %s. The worst was %s." %
+               (round(days), hold, cc.fmt_pct(r["dist"], 1, False), a.side, pct_words(r["p_liq"]),
+                cc.fmt_pct(r["worst"] or 0, 1, False)))
     if a.stop is not None:
         cc.out("Your stop %s is %s away: liquidation is %.1fx further (the pack needs %gx). Highest leverage that passes: %dx." %
                (P(a.stop), cc.fmt_pct(r["stop_dist"], 2, False), r["buffer"], r["need"], r["max_safe"] or 0))
