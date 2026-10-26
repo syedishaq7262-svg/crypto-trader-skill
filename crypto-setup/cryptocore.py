@@ -266,6 +266,7 @@ DEFAULTS = {
     "min_reward_risk": 1.5,
     "require_stop": True,
     "max_leverage": 3,
+    "max_margin_pct": 50,
     "margin_mode": "isolated",
     "allow_cross_margin": False,
     "allow_short": True,
@@ -275,7 +276,7 @@ DEFAULTS = {
     "max_hold_hours": 24,
     "taker_fee_bps": None,           # None: the venue's base rate
     "maker_fee_bps": None,
-    "slippage_bps": 3.0,
+    "slippage_bps": None,            # None: measured from the live order book when a plan is made
     "blocked": [],
 }
 
@@ -1686,6 +1687,243 @@ def market_regime(venue, cfg=None, breadth_n=30):
     return out
 
 
+# ---------------------------------------------------------------- trading maths
+
+STEP5 = 300000
+HOUR_MS = 3600000
+SIDES = ("long", "short")
+
+
+def parse_hold(text, default_hours=None):
+    """'24h', '90m', '2d', '8' (hours) -> hours as a float."""
+    if text is None or text == "":
+        return default_hours
+    s = str(text).strip().lower()
+    m = re.match(r"^(\d+(?:\.\d+)?)\s*([mhd]?)$", s)
+    if not m:
+        raise CryptoError("could not read the hold time %r. Use 90m, 8h or 2d." % text)
+    v = float(m.group(1))
+    unit = m.group(2) or "h"
+    hours = v / 60.0 if unit == "m" else v * 24.0 if unit == "d" else v
+    if hours <= 0 or hours > 24 * 14:
+        raise CryptoError("a hold must be between a few minutes and 14 days")
+    return hours
+
+
+DEFAULT_SLIPPAGE = 0.0003      # when the book cannot be read: 3 basis points a side
+MIN_SLIPPAGE = 0.00005         # never assume less than half a basis point
+
+
+def cost_rates(venue, cfg=None):
+    """Fees and slippage as fractions: taker, maker, slippage. Slippage is None when the
+    config leaves it to be measured from the order book (see measure_slippage)."""
+    cfg = cfg or load_config()
+    tb, mb = cfg.get("taker_fee_bps"), cfg.get("maker_fee_bps")
+    taker = (tb / 1e4) if tb is not None else venue.taker_fee
+    maker = (mb / 1e4) if mb is not None else venue.maker_fee
+    sb = cfg.get("slippage_bps")
+    return {"taker": taker, "maker": maker, "slippage": (sb / 1e4) if sb is not None else None,
+            "slippage_source": "your config" if sb is not None else None}
+
+
+def measure_slippage(venue, symbol, notional=10000.0):
+    """Expected cost of crossing the book with a market order: half the spread plus the impact
+    of `notional` USD, as a fraction of the mid. (fraction, words)."""
+    try:
+        bids, asks = venue.orderbook(symbol, 100 if venue.name != "hyperliquid" else 20)
+    except CryptoError:
+        return DEFAULT_SLIPPAGE, "3 bps (the order book could not be read)"
+    if not bids or not asks:
+        return DEFAULT_SLIPPAGE, "3 bps (empty order book)"
+    mid = (bids[0][0] + asks[0][0]) / 2.0
+    buy, got_b = walk_book(asks, notional)
+    sell, got_s = walk_book(bids, notional)
+    if not buy or not sell or got_b < notional * 0.999 or got_s < notional * 0.999:
+        return max(DEFAULT_SLIPPAGE, (asks[0][0] - bids[0][0]) / mid), "the book is thin: %s of depth seen" % fmt_usd(min(got_b, got_s))
+    s = max((buy / mid - 1.0 + 1.0 - sell / mid) / 2.0, MIN_SLIPPAGE)
+    return s, "%.1f bps, measured from the order book for a %s order" % (s * 1e4, fmt_usd(notional))
+
+
+def plan_costs(plan, venue=None, cfg=None):
+    """The costs a plan was made with (every later skill uses the same numbers)."""
+    pc = (plan or {}).get("costs") or {}
+    if pc.get("taker") is not None and pc.get("slippage") is not None:
+        return {"taker": pc["taker"], "maker": pc.get("maker", pc["taker"]), "slippage": pc["slippage"]}
+    c = cost_rates(venue, cfg) if venue is not None else {"taker": 0.0005, "maker": 0.0002, "slippage": None}
+    if c["slippage"] is None:
+        c["slippage"] = DEFAULT_SLIPPAGE
+    return {"taker": c["taker"], "maker": c["maker"], "slippage": c["slippage"]}
+
+
+def plan_id(plan):
+    """A short hash naming one exact plan, so a Time Machine run is never matched to another plan."""
+    keys = ("created_at", "venue", "symbol", "side", "entry", "stop", "target", "entry_time", "exit_by")
+    canon = json.dumps([plan.get(k) for k in keys], sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha1(canon.encode("utf-8")).hexdigest()[:12]
+
+
+def funding_times(start_ms, end_ms, hours):
+    """UTC-aligned funding times F with start < F <= end."""
+    step = int(round((hours or 8.0) * HOUR_MS))
+    f = (start_ms // step + 1) * step
+    out = []
+    while f <= end_ms:
+        out.append(f)
+        f += step
+    return out
+
+
+def side_sign(side):
+    if side not in SIDES:
+        raise CryptoError("side must be long or short, not %r" % side)
+    return 1.0 if side == "long" else -1.0
+
+
+def net_r(side, entry, exit_px, outcome, risk, costs, funding_paid=0.0):
+    """One trade's result in R after costs.
+
+    outcome 'target' exits with a resting limit (maker fee, no slippage); 'stop' and
+    'open' (out at the time limit) exit at market (taker fee plus slippage). The entry
+    is a market order. funding_paid is per coin, positive when this side paid it.
+    """
+    sg = 1.0 if side == "long" else -1.0
+    gross = sg * (exit_px - entry) / risk
+    c_in = (costs["taker"] + costs["slippage"]) * entry / risk
+    if outcome == "target":
+        c_out = costs["maker"] * exit_px / risk
+    else:
+        c_out = (costs["taker"] + costs["slippage"]) * exit_px / risk
+    return gross - c_in - c_out - funding_paid / risk
+
+
+def breakeven_share(target_r, entry, stop, target, risk, costs):
+    """Share of decided trades the target must win to break even after fees and slippage."""
+    c_in = (costs["taker"] + costs["slippage"]) * entry / risk
+    win = target_r - c_in - costs["maker"] * target / risk
+    loss = 1.0 + c_in + (costs["taker"] + costs["slippage"]) * stop / risk
+    if win <= 0:
+        return 1.0
+    return loss / (win + loss)
+
+
+# Maintenance margin. Bybit and Hyperliquid publish theirs; Binance's brackets need a key,
+# so the pack uses its tier-1 rates for BTC and ETH and a cautious 2.5% for everything else.
+BINANCE_MMR = {"BTC": 0.004, "ETH": 0.005}
+BINANCE_MMR_DEFAULT = 0.025
+
+
+def mmr_for(venue, market, notional):
+    """(maintenance margin rate, deduction in USD, where the number came from)."""
+    tiers = None
+    try:
+        cache = getattr(venue, "_tier_cache", None)
+        if cache is None:
+            cache = venue._tier_cache = {}
+        if market["symbol"] not in cache:
+            cache[market["symbol"]] = venue.risk_tiers(market["symbol"])
+        tiers = cache[market["symbol"]]
+    except CryptoError:
+        tiers = None
+    if tiers:
+        for t in tiers:
+            if t.get("max_notional") is None or notional <= t["max_notional"]:
+                return t["mmr"], t.get("deduction") or 0.0, "%s risk tiers" % venue.label.split(" ")[0]
+        t = tiers[-1]
+        return t["mmr"], t.get("deduction") or 0.0, "%s risk tiers" % venue.label.split(" ")[0]
+    if venue.name == "binance":
+        return BINANCE_MMR.get(market["coin"], BINANCE_MMR_DEFAULT), 0.0, "Binance tier-1 estimate"
+    return 0.02, 0.0, "a cautious 2% estimate"
+
+
+def liq_price(entry, side, leverage, mmr, fee=0.0, deduction=0.0, qty=None):
+    """Isolated-margin liquidation price of a linear USDT perpetual.
+
+    Liquidation comes when the position's margin plus its loss falls to the maintenance
+    margin plus the fee to close it:
+        long : P = (E (1 - 1/L) - d/q) / (1 - mmr - fee)
+        short: P = (E (1 + 1/L) + d/q) / (1 + mmr + fee)
+    d is the tier's maintenance deduction and q the size in coins.
+    """
+    if leverage <= 0:
+        raise CryptoError("leverage must be positive")
+    ded = (deduction / qty) if (deduction and qty) else 0.0
+    if side == "long":
+        p = (entry * (1.0 - 1.0 / leverage) - ded) / (1.0 - mmr - fee)
+        return min(max(p, 0.0), entry)          # at or above the entry: the margin is under maintenance at once
+    p = (entry * (1.0 + 1.0 / leverage) + ded) / (1.0 + mmr + fee)
+    return max(p, entry)
+
+
+def instant_liquidation(leverage, mmr, fee=0.0):
+    """True when the initial margin (1/L) does not even cover the maintenance margin plus the closing fee."""
+    return 1.0 / leverage <= mmr + fee
+
+
+def max_safe_leverage(entry, stop, side, mmr, fee, buffer, cap=125):
+    """The highest whole leverage whose liquidation sits at least `buffer` times the stop distance away."""
+    stop_dist = abs(entry - stop) / entry
+    best = 0
+    for lev in range(1, cap + 1):
+        lp = liq_price(entry, side, lev, mmr, fee)
+        dist = abs(entry - lp) / entry if lp > 0 else 1.0
+        if dist >= buffer * stop_dist:
+            best = lev
+        else:
+            break
+    return best
+
+
+def floor_step(qty, step):
+    if not step:
+        return qty
+    n = math.floor(qty / step + 1e-9)
+    d = tick_decimals(step)
+    return round(n * step, d)
+
+
+def day_start(at_ms=None, tzname=None):
+    """Start of the user's day (in display_tz) containing at_ms, as UTC ms."""
+    at_ms = now_ms() if at_ms is None else at_ms
+    tzname = tzname if tzname is not None else load_config().get("display_tz", "UTC")
+    off = _tz_offset_minutes(at_ms, tzname) * 60000
+    return ((at_ms + off) // DAY_MS) * DAY_MS - off
+
+
+def read_positions():
+    d = read_json(wpath("positions.json"), None) or {}
+    return d.get("positions") or []
+
+
+def read_ledger():
+    return read_jsonl(wpath("ledger.jsonl"))
+
+
+def today_stats(cfg=None, at_ms=None):
+    """What the risk rules need from the trade log: today's entries, today's net result,
+    open positions and the risk still on them, and the latest closed trades."""
+    cfg = cfg or load_config()
+    at_ms = now_ms() if at_ms is None else at_ms
+    start = day_start(at_ms, cfg.get("display_tz", "UTC"))
+    led = read_ledger()
+    entries = [e for e in led if e.get("type") == "open" and start <= e.get("at", 0) <= at_ms]
+    closes_ = [e for e in led if e.get("type") == "close"]
+    today_closes = [e for e in closes_ if start <= e.get("at", 0) <= at_ms]
+    realized = sum(fnum(e.get("pnl_usd"), 0.0) for e in today_closes)
+    pos = read_positions()
+    open_risk = sum(fnum(p.get("loss_at_stop_usd"), fnum(p.get("margin"), 0.0)) for p in pos)
+    closes_.sort(key=lambda e: e.get("at", 0))
+    return {"day_start": start, "entries": len(entries), "realized": realized, "open": pos,
+            "open_risk": open_risk, "open_margin": sum(fnum(p.get("margin"), 0.0) for p in pos),
+            "last_closes": closes_[-10:]}
+
+
+def fingerprint(order):
+    """A short hash of the fields that make an order what it is. crypto-broker matches on it."""
+    keys = ("venue", "symbol", "side", "qty", "type", "limit", "stop", "target", "leverage", "margin_mode", "reduce_only")
+    canon = json.dumps([order.get(k) for k in keys], sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha1(canon.encode("utf-8")).hexdigest()[:16]
+
+
 # ---------------------------------------------------------------- indicators
 
 def closes(bars):
@@ -1958,6 +2196,18 @@ def fmt_usd(x, dp=1):
     return "%s$%.2f" % (sign, a)
 
 
+def fmt_money(x):
+    """$1,408.22 (exact dollars for order tickets)."""
+    if x is None:
+        return "-"
+    return ("-$" if x < 0 else "$") + "{:,.2f}".format(abs(x))
+
+
+def fmt_qty(q, step=None):
+    d = tick_decimals(step) if step else (0 if q >= 1000 else 2 if q >= 1 else 6)
+    return "{:,.{d}f}".format(q, d=d)
+
+
 def fmt_small_pct(x):
     """Spreads and price impact: more decimals when tiny."""
     if x is None:
@@ -2062,6 +2312,12 @@ def run(main):
     except KeyboardInterrupt:
         sys.stderr.write("Stopped.\n")
         return 130
+    except BrokenPipeError:            # the reader (head, a pager) closed early: not an error
+        try:
+            sys.stdout = open(os.devnull, "w")
+        except OSError:
+            pass
+        return 0
     return 0 if code is None else code
 
 

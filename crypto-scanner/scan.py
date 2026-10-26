@@ -41,11 +41,11 @@ SESSION_NAMES = {"utc": "UTC day", "tokyo": "Tokyo", "london": "London", "ny": "
 
 
 class Ctx(object):
-    """One coin's data for the setups."""
+    """One coin's data for the setups. Pass b15 to skip building it from b5 (the Time Machine does)."""
 
-    def __init__(self, m, t, b5, b1h):
+    def __init__(self, m, t, b5, b1h, b15=None):
         self.m, self.t, self.b5, self.b1h = m, t, b5, b1h
-        self.b15 = cc.resample(b5, "15m") if b5 else []
+        self.b15 = b15 if b15 is not None else (cc.resample(b5, "15m") if b5 else [])
         a = cc.atr(self.b15, 14) if len(self.b15) > 15 else []
         self.atr15 = a[-1] if a else None
         last = self.b15[-1][C] if self.b15 else None
@@ -283,6 +283,25 @@ def setup_rs(ctxs, btc, a, sides):
     return out
 
 
+PARAM_KEYS = ("session", "or_minutes", "entry_hours", "lookback_hours", "min_rvol", "spike_rvol", "squeeze_pct",
+              "min_pullback", "rsi_low", "rsi_high", "rs_decile", "rs_min")
+
+
+def params_of(a):
+    """The thresholds a scan used, so a later re-run of the same rule matches it exactly."""
+    return dict((k, getattr(a, k)) for k in PARAM_KEYS if hasattr(a, k))
+
+
+def args_from(params=None):
+    """Scanner arguments with the defaults, overlaid with saved params."""
+    a = build_parser().parse_args([])
+    a.session = cc.load_config().get("session") or "utc"
+    for k, v in (params or {}).items():
+        if k in PARAM_KEYS and v is not None:
+            setattr(a, k, v)
+    return a
+
+
 SETUP_FUNCS = {"orb": setup_orb, "breakout": setup_breakout, "squeeze": setup_squeeze, "trend": setup_trend,
                "reversal": setup_reversal, "volume": setup_volume}
 
@@ -386,6 +405,7 @@ def scan(a, venue, cfg):
     data = {
         "mode": "scan", "venue": venue.name, "venue_label": venue.label,
         "as_of": now, "as_of_utc": cc.fmt_utc(now), "session": a.session, "or_minutes": a.or_minutes,
+        "params": params_of(a),
         "setups": setups, "sides": sides, "universe": len(universe), "scanned": len(ctxs),
         "left_out": why, "failed": failed, "notes": notes, "hits": hits,
     }

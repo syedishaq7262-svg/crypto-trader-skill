@@ -25,15 +25,16 @@
 
   "_leverage": "Leverage and margin. Isolated margin limits a loss to the margin you put up for that one position.",
   "max_leverage": 3,
+  "max_margin_pct": 50,
   "margin_mode": "isolated",
   "allow_cross_margin": false,
   "allow_short": true,
   "min_liq_buffer": 2.0,
 
-  "_costs": "Fees in basis points (0.01%). Leave null to use the venue's base rate.",
+  "_costs": "Fees and slippage in basis points (0.01%). null fees: the venue's base rate. null slippage: measured from the live order book when the plan is made.",
   "taker_fee_bps": null,
   "maker_fee_bps": null,
-  "slippage_bps": 3.0,
+  "slippage_bps": null,
 
   "_orders": "paper true simulates fills at live prices against the real order book. Live orders need paper false, your own keys in environment variables, a PASS from crypto-risk and your typed yes.",
   "paper": true,

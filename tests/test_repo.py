@@ -75,9 +75,11 @@ class Repo(unittest.TestCase):
                 self.assertNotRegex(src, r"(?<![\w.])(list|dict|tuple|set)\[[A-Za-z]", "%s/%s" % (s, f))
 
     def test_standard_library_only(self):
-        allowed = set(("argparse ast base64 collections concurrent contextlib datetime gzip hashlib hmac importlib io json "
-                       "math os platform random re shutil socket ssl statistics sys tempfile threading time urllib uuid zipfile "
-                       "cryptocore").split())
+        import sys
+        allowed = set(getattr(sys, "stdlib_module_names", ())) | set((
+            "argparse ast base64 bisect collections concurrent contextlib datetime gzip hashlib hmac importlib io json "
+            "math os platform random re shutil socket ssl statistics sys tempfile threading time urllib uuid zipfile").split())
+        allowed.add("cryptocore")
         for s in SKILLS:
             folder = os.path.join(ROOT, s)
             for f in os.listdir(folder):
