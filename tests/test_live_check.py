@@ -37,6 +37,7 @@ class LiveCheck(unittest.TestCase):
             text = out.getvalue()
             self.assertEqual(code, 0, text)
             self.assertIn("NOT live data", text)                               # a test run can never pass for a live one
+            self.assertRegex(text, r"Live check \| crypto-trader-skill \d+\.\d+\.\d+, code [0-9a-f]{8} \|")
             self.assertIn("checks passed", text)
             self.assertNotIn("FAIL", text)
             self.assertIn("Exchange keys are hidden from this run", text)

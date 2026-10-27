@@ -156,7 +156,8 @@ def wallet_state(addr, venue=None, fresh=False):
 
 
 def wallet_fills(addr, since):
-    raw = info({"type": "userFillsByTime", "user": addr, "startTime": int(since), "aggregateByTime": True}, weight=20)
+    raw = info({"type": "userFillsByTime", "user": addr, "startTime": int(since), "aggregateByTime": True},
+               weight=60)            # 20, plus 1 for every 20 fills returned (up to 2,000): budget for a busy wallet
     out = []
     for f in raw if isinstance(raw, list) else []:
         if not isinstance(f, dict):

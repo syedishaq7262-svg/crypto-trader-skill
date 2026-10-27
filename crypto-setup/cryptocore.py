@@ -17,6 +17,7 @@ It never places an order and never asks for a key. Order signing lives in
 crypto-broker only.
 """
 
+import atexit
 import email.utils
 import gzip
 import hashlib
@@ -454,6 +455,51 @@ def _load_transport(path):
     return _TRANSPORTS[key]
 
 
+_BUCKETS = {}                 # host -> [weight left, at]: shared by every client in this process
+_BUCKETS_LOCK = threading.Lock()
+_BUCKETS_STATE = {"loaded": False, "used": False}
+
+
+def _bucket_file():
+    return wpath("cache", "ratelimit.json")
+
+
+def _load_buckets(limits):
+    """What the last runs (other tools, a minute ago) left of each host's budget, so a quick run of several tools
+    in a row does not spend the same minute twice."""
+    if _BUCKETS_STATE["loaded"]:
+        return
+    _BUCKETS_STATE["loaded"] = True
+    try:
+        saved = read_json(_bucket_file(), {}) or {}
+    except CryptoError:
+        saved = {}
+    now = time.time()
+    for host, cap in limits.items():
+        b = saved.get(host)
+        if isinstance(b, list) and len(b) == 2 and host not in _BUCKETS:
+            try:
+                level, at = float(b[0]), float(b[1])
+            except (TypeError, ValueError):
+                continue
+            if 0 <= now - at < 120:
+                _BUCKETS[host] = [min(float(cap), level), at]
+
+
+def _save_buckets():
+    if not _BUCKETS_STATE["used"]:
+        return
+    try:
+        with _BUCKETS_LOCK:
+            data = dict((h, [round(b[0], 2), b[1]]) for h, b in _BUCKETS.items())
+        write_json(_bucket_file(), data)
+    except (OSError, CryptoError):
+        pass
+
+
+atexit.register(_save_buckets)
+
+
 class Http(object):
     """One client for every exchange call.
 
@@ -482,7 +528,6 @@ class Http(object):
         self.pace = os.environ.get("CRYPTO_NO_PACE") is None
         self.stats = {"requests": 0, "bytes": 0, "seconds": 0.0, "retries": 0, "by_host": {}}
         self._lock = threading.Lock()
-        self._buckets = {}
         self.skew_ms = None          # this computer's clock minus the exchanges' (from their Date headers)
 
     def _note_clock(self, host, rh):
@@ -501,17 +546,22 @@ class Http(object):
             self.skew_ms = skew if self.skew_ms is None else min(self.skew_ms, skew)
 
     # -- rate limiting
+    def _paced(self, host):
+        return bool(self.LIMITS.get(host)) and self.pace and not self.offline and not self.transport
+
     def _take(self, host, weight):
-        cap = self.LIMITS.get(host)
-        if not cap or not self.pace or self.offline or self.transport:
+        if not self._paced(host):
             return
+        cap = self.LIMITS[host]
+        _load_buckets(self.LIMITS)
+        _BUCKETS_STATE["used"] = True
         while True:
-            with self._lock:
-                b = self._buckets.get(host)
+            with _BUCKETS_LOCK:
+                b = _BUCKETS.get(host)
                 now = time.time()
                 if b is None:
                     b = [float(cap), now]
-                    self._buckets[host] = b
+                    _BUCKETS[host] = b
                 b[0] = min(float(cap), b[0] + (now - b[1]) * cap / 60.0)
                 b[1] = now
                 if b[0] >= weight:
@@ -519,6 +569,17 @@ class Http(object):
                     return
                 wait = (weight - b[0]) * 60.0 / cap
             time.sleep(min(max(wait, 0.05), 5.0))
+
+    def _spent(self, host):
+        """The host said 'too many requests': whatever we counted, its budget is empty now."""
+        if not self._paced(host):
+            return
+        with _BUCKETS_LOCK:
+            b = _BUCKETS.get(host)
+            if b is not None:
+                b[0] = min(b[0], 0.0)
+                b[1] = time.time()
+        _save_buckets()
 
     @staticmethod
     def key(method, url, params=None, body=None):
@@ -592,6 +653,7 @@ class Http(object):
                 except ValueError:
                     retry_after = None
                 err = "rate limited (HTTP 429)"
+                self._spent(host)
             elif err is None and status >= 500:
                 err = "HTTP %d" % status
             if err is None:
@@ -1404,7 +1466,8 @@ class Hyperliquid(Venue):
         out = []
         s = start_ms
         for _ in range(40):
-            rows = self.post({"type": "fundingHistory", "coin": symbol, "startTime": s, "endTime": end_ms}) or []
+            rows = self.post({"type": "fundingHistory", "coin": symbol, "startTime": s, "endTime": end_ms},
+                             weight=45) or []          # 20, plus 1 for every 20 rows of a full 500-row page
             got = [(int(r["time"]), float(r["fundingRate"])) for r in rows]
             out.extend(got)
             if len(got) < 500:

@@ -143,6 +143,40 @@ class Names(unittest.TestCase):
             cc.HTTP = saved
             cc.set_now(None)
 
+    def test_the_rate_budget_carries_from_one_tool_to_the_next(self):
+        host = "api.hyperliquid.xyz"                     # 1,000 weight a minute in the pack's own budget
+        tmp = tempfile.mkdtemp(prefix="crypto-budget-")
+        saved_dir = os.environ.get("CRYPTO_DIR")
+        saved = (dict(cc._BUCKETS), dict(cc._BUCKETS_STATE))
+        try:
+            os.environ["CRYPTO_DIR"] = tmp
+            cc._BUCKETS.clear()
+            cc._BUCKETS_STATE.update(loaded=False, used=False)
+
+            def client():
+                h = cc.Http()
+                h.pace, h.transport, h.offline = True, None, None
+                return h
+            client()._take(host, 600)                    # one tool spends 600...
+            client()._take(host, 300)                    # ...and the next tool in this process sees it
+            self.assertAlmostEqual(cc._BUCKETS[host][0], 100, delta=5)
+            cc._save_buckets()
+            cc._BUCKETS.clear()                          # a new process: it reads what the last one left
+            cc._BUCKETS_STATE.update(loaded=False, used=False)
+            client()._take(host, 50)
+            self.assertAlmostEqual(cc._BUCKETS[host][0], 50, delta=5)
+            client()._spent(host)                        # the host said 429: nothing left, whatever we counted
+            self.assertLessEqual(cc._BUCKETS[host][0], 0)
+        finally:
+            cc._BUCKETS.clear()
+            cc._BUCKETS.update(saved[0])
+            cc._BUCKETS_STATE.update(saved[1])
+            if saved_dir is None:
+                os.environ.pop("CRYPTO_DIR", None)
+            else:
+                os.environ["CRYPTO_DIR"] = saved_dir
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def test_multipliers(self):
         self.assertEqual(cc.split_multiplier("1000PEPE"), ("PEPE", 1000))
         self.assertEqual(cc.split_multiplier("SHIB1000"), ("SHIB", 1000))

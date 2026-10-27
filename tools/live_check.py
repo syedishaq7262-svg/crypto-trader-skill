@@ -36,6 +36,25 @@ import cryptocore as cc  # noqa: E402
 KEY_VARS = ("BINANCE_API_KEY", "BINANCE_API_SECRET", "BYBIT_API_KEY", "BYBIT_API_SECRET")   # hidden while it runs
 
 
+def code_id():
+    """The pack's version and a short fingerprint of its code, so a report says exactly which code ran."""
+    import hashlib
+    import json
+    h = hashlib.sha1()
+    for folder in sorted(os.listdir(ROOT)):
+        if folder.startswith("crypto-") or folder == "tools":
+            for f in sorted(os.listdir(os.path.join(ROOT, folder))):
+                if f.endswith(".py"):
+                    with open(os.path.join(ROOT, folder, f), "rb") as fh:
+                        h.update(f.encode("utf-8") + b"\0" + fh.read().replace(b"\r\n", b"\n"))
+    try:
+        with open(os.path.join(ROOT, ".claude-plugin", "plugin.json")) as fh:
+            version = json.load(fh).get("version", "?")
+    except (OSError, ValueError):
+        version = "?"
+    return "%s, code %s" % (version, h.hexdigest()[:8])
+
+
 def share_news_cache(src, dst):
     """Hand the news, calendar and notices caches to the next venue's folder: those sites are the same for every
     venue, and the calendar's host allows only a few requests an hour."""
@@ -306,8 +325,8 @@ def main(argv=None):
         sys.stdout.flush()
         lines.append(text)
 
-    say("Live check | %s | Python %s on %s %s" % (cc.fmt_utc(cc.now_ms()), platform.python_version(), platform.system(),
-                                                  platform.release()))
+    say("Live check | crypto-trader-skill %s | %s | Python %s on %s %s" % (
+        code_id(), cc.fmt_utc(cc.now_ms()), platform.python_version(), platform.system(), platform.release()))
     say("Work folder %s (temporary; your own crypto/ folder is not used)." % tmp)
     say("Exchange keys are hidden from this run: it reads public data and trades on paper only.")
     if os.environ.get("CRYPTO_FAKE_EXCHANGE"):
