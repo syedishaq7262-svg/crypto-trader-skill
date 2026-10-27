@@ -16,6 +16,7 @@ class Clock(unittest.TestCase):
         self.assertEqual(cc.fmt_utc(cc.parse_when("2026-10-26 13:45")), "2026-10-26 13:45 UTC")
         self.assertEqual(cc.fmt_utc(cc.parse_when("2026-10-26 13:45+11:00")), "2026-10-26 02:45 UTC")
         self.assertEqual(cc.fmt_utc(cc.parse_when("2026-10-26T13:45:00Z")), "2026-10-26 13:45 UTC")
+        self.assertEqual(cc.fmt_utc(cc.parse_when("2026-10-26 13:45 UTC")), "2026-10-26 13:45 UTC")     # as printed
         self.assertEqual(cc.parse_when("1761486300"), 1761486300000)
         self.assertEqual(cc.parse_when(1761486300000), 1761486300000)
         with self.assertRaises(cc.CryptoError):
@@ -192,6 +193,69 @@ class Names(unittest.TestCase):
         self.assertEqual(cc.clean_coin("1000pepe"), "PEPE")
         self.assertEqual(cc.clean_coin("kPEPE"), "PEPE")
         self.assertEqual(cc.clean_coin("kava"), "KAVA")
+
+
+class CostRule(unittest.TestCase):
+    def test_stop_cost_and_the_limit(self):
+        costs = {"taker": 0.0005, "slippage": 0.0003}
+        self.assertAlmostEqual(cc.stop_cost_r(100.0, 99.0, costs), 0.0008 * 199.0)       # in and out at market
+        self.assertAlmostEqual(cc.stop_cost_r(100.0, 101.0, costs), 0.0008 * 201.0)      # a short
+        self.assertEqual(cc.cost_limit({"max_cost_r": 0.2}), 0.2)
+        for off in (0, None, "", "x", -1):
+            self.assertIsNone(cc.cost_limit({"max_cost_r": off}), off)
+        self.assertFalse(cc.over_cost_limit(0.204, 0.2))                                 # prints as 0.20R
+        self.assertTrue(cc.over_cost_limit(0.206, 0.2))
+        self.assertFalse(cc.over_cost_limit(5.0, None))
+        self.assertEqual(cc.DEFAULTS["max_cost_r"], 0.2)
+
+    def test_one_order_book_read_per_coin(self):
+        class Venue(object):
+            name, reads = "binance", 0
+
+            def orderbook(self, symbol, n):
+                Venue.reads += 1
+                return [(99.99, 1e6)], [(100.01, 1e6)]
+        v = Venue()
+        first = cc.measure_slippage(v, "XUSDT")
+        self.assertEqual(cc.measure_slippage(v, "XUSDT"), first)
+        self.assertEqual(Venue.reads, 1)
+        cc.measure_slippage(v, "YUSDT")
+        cc.measure_slippage(Venue(), "XUSDT")                    # another run, another reading
+        self.assertEqual(Venue.reads, 3)
+
+
+class TrackRecord(unittest.TestCase):
+    def test_the_record_that_ships(self):
+        with Session():
+            tr = cc.track_record()
+            self.assertEqual((tr["venue"], tr["coins"], tr["cost_limit_r"]), ("binance", 40, 0.2))
+            self.assertEqual(cc.track_key("orb", "ny"), "orb-ny")
+            self.assertEqual(cc.track_key("orb"), "orb-utc")
+            self.assertEqual(cc.track_entry("breakout", "long")["n"], 3393)
+            raw, checked = cc.track_parts("breakout", "long")
+            self.assertEqual(raw, "-0.10R a trade after costs over 3,393 trades")
+            self.assertEqual(checked, "+0.02R over 742 (can't be told from zero)")
+            self.assertEqual(cc.track_parts("volume", "long")[0],
+                             "-0.02R a trade after costs over 3,226 trades (can't be told from zero)")
+            self.assertIsNone(cc.track_parts("orb", "long", "tokyo"))
+            self.assertIsNone(cc.track_parts("rs", "long"))
+            self.assertIsNone(cc.track_parts("breakout", "both"))
+            self.assertEqual(cc.track_source(), "Binance, 40 coins, 29 Jul to 27 Oct 2026")
+            for k, e in tr["setups"].items():                     # every range holds its own average
+                self.assertLessEqual(e["lo"], e["avg_r"])
+                self.assertLessEqual(e["avg_r"], e["hi"])
+
+    def test_your_own_run_wins(self):
+        with Session() as s:
+            mine = dict(cc.track_record())
+            mine["venue_label"] = "Bybit linear perpetuals"
+            mine["setups"] = {"breakout|long": {"n": 12, "avg_r": 0.5, "lo": 0.1, "hi": 0.9, "checked": {"n": 0}}}
+            cc.write_json(s.path("track_record.json"), mine)
+            self.assertEqual(cc.track_parts("breakout", "long"), ("+0.50R a trade after costs over 12 trades", "none passed"))
+            self.assertIsNone(cc.track_parts("trend", "long"))
+            self.assertTrue(cc.track_source().startswith("Bybit, 40 coins"))
+            cc.write_json(s.path("track_record.json"), {"not": "a record"})
+            self.assertEqual(cc.track_entry("breakout", "long")["n"], 3393)      # an unusable file is passed over
 
 
 class Indicators(unittest.TestCase):

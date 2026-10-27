@@ -72,7 +72,10 @@ class ReadmeExample(unittest.TestCase):
 
 
 BT_REPORT = os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-report.txt")
+BT_CHECKS = os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-checks.txt")
 BT_TRADES = os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-trades.csv.gz")
+CHECK_ROWS = (("every signal", "every signal"), ("the cost rule", "cost rule"), ("the 30-day check", "30-day check"),
+              ("both", "both checks"))
 
 
 class ReadmeBacktest(unittest.TestCase):
@@ -89,10 +92,32 @@ class ReadmeBacktest(unittest.TestCase):
             report = fh.read()
         sec = self.section()
         for x in ("27,566", "8,669", "17,300", "1,597", "35.1%", "34.6%", "35.7%", "-0.18R", "-0.19R", "-0.16R",
-                  "+0.02R", "0.20R", "0.77", "+0.06R", "5,426", "-0.05R", "$516.95", "241 trades", "$562.97",
-                  "+0.07R", "342", "+0.01R", "694", "-0.37R", "-0.50R"):
+                  "+0.02R", "0.20R", "0.77", "+0.06R", "5,426", "-0.05R", "+0.07R", "342", "+0.01R", "694", "-0.37R", "-0.50R"):
             self.assertIn(x, sec, x)
             self.assertIn(x, report, x)
+
+    def test_the_lessons_are_the_checks_report(self):
+        """The checks report is rebuilt from the published trades by test_backtest.Published; the README quotes it."""
+        with open(BT_CHECKS) as fh:
+            checks = fh.read()
+        table, paper = checks.split("A $1,000 paper account")
+        sec = self.section()
+        def row(text, label):
+            k = len(label.split())
+            return [l.split()[k:] for l in text.splitlines()
+                    if l.startswith("  " + label + " ") and re.match(r"^[0-9,]+$", l.split()[k])][0]
+        for words, label in CHECK_ROWS:
+            n, first, second = row(table, label)[:3]
+            self.assertIn("| %s | %s | %s | %s |" % (words, first, second, n), sec)
+            r = row(paper, label)
+            median, lo, hi, lost = r[2], r[3], r[5], r[7]
+            self.assertIn("| %s | %s | %s to %s | %s |" % (words, median, lo, hi, lost), sec)
+            if label == "every signal":
+                self.assertIn("lost money in %s of 100 runs; the median run ended at %s" % (lost, median), sec)
+        self.assertIn("the 10,209 trades whose stop-out would have cost more\n  than 0.2R were even before costs (-0.01R) "
+                      "and lost 0.38R a trade after\n  them.", sec)
+        self.assertIn("the 10,209 trades whose stop-out cost more than 0.2R averaged -0.38R after costs (-0.01R before)", checks)
+        self.assertIn("Halves split at 2026-09-27 06:00 UTC", checks.replace("halves split", "Halves split"))
 
     def test_the_report_and_the_table_come_from_the_trades(self):
         with gzip.open(BT_TRADES, "rt", encoding="utf-8", newline="") as fh:

@@ -243,7 +243,7 @@ def checks_for(venue, quick):
         Check("entry orb BTC,ETH,SOL", "entry", ["check", "BTC,ETH,SOL", "--setup", "orb", "--session", "ny"] + v, ok_codes=(0, 1)),
         Check("entry breakout SOL", "entry", ["check", "SOL", "--setup", "breakout"] + v, ok_codes=(0, 1)),
         Check("entry squeeze ETH", "entry", ["check", "ETH", "--setup", "squeeze"] + v, ok_codes=(0, 1)),
-        Check("exit plan BTC long", "exit", ["plan", "BTC", "--side", "long", "--manual", "--stop", "atr:1.5"] + v, expect=ex_plan),
+        Check("exit plan BTC long", "exit", ["plan", "BTC", "--side", "long", "--manual", "--stop", "pct:2"] + v, expect=ex_plan),
         Check("timemachine run", "tm", ["run", "--replays", "1000" if quick else "4000"], expect=ex_tm),
         Check("budget size", "budget", [], expect=ex_budget),
         Check("liquidation check", "liq", ["check"], ok_codes=(0, 1)),

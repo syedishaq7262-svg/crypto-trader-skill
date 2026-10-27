@@ -85,6 +85,27 @@ class Gate(unittest.TestCase):
                 self.assertEqual(code, 1, (change, out))
                 self.assertBlocked(r, word)
 
+    def test_a_stop_too_tight_for_the_costs(self):
+        with Session() as s:
+            ready(s, "SOL", "binance", "long", "--stop", "pct:0.3")
+            code, out, err, r = check(s)
+            self.assertEqual(code, 1, out)
+            self.assertBlocked(r, "costs")
+            self.assertIn("over your 0.2R limit (max_cost_r)", " ".join(r["reasons"]))
+            self.assertGreater(r["facts"]["stop_cost_r"], 0.2)
+            self.assertIn("costs %.2fR at a stop-out (max 0.2R)" % r["facts"]["stop_cost_r"], out)
+        for limit, blocked in ((0.5, False), (0, False), (0.2, True)):
+            with Session(config={"max_cost_r": limit}) as s:
+                ready(s, "SOL", "binance", "long", "--stop", "pct:0.3")
+                code, out, err, r = check(s)
+                self.assertEqual(any(x.startswith("costs") for x in r["reasons"]), blocked, (limit, r["reasons"]))
+        with Session() as s:                                   # a normal stop passes and shows what it costs
+            ready(s)
+            code, out, err, r = check(s)
+            self.assertEqual(r["verdict"], "PASS", r)
+            self.assertLess(r["facts"]["stop_cost_r"], 0.2)
+            self.assertIn("at a stop-out (max 0.2R)", out)
+
     def test_blocked_list_and_shorts(self):
         with Session() as s:
             ready(s)

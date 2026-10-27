@@ -113,6 +113,12 @@ def check_order(o, cfg, ctx, venue, m, t, plan, tm):
         unit += max(0.0, sg * (rate or 0.0) * meas * pays)
         loss = o["qty"] * unit
         facts["loss_usd"] = loss
+        cost_r = cc.stop_cost_r(meas, stop, costs)
+        facts["stop_cost_r"] = cost_r
+        lim = cc.cost_limit(cfg)
+        if cc.over_cost_limit(cost_r, lim):
+            reasons.append("costs: fees and slippage would take %.2fR from a stop-out, over your %gR limit (max_cost_r): "
+                           "the stop is too tight for this coin's costs" % (cost_r, lim))
         if loss > float(cfg["max_loss_per_trade_usd"]) + 0.005:
             reasons.append("loss: %s x %s at the stop (fees, slippage, funding included) = %s, over your %s max loss per trade"
                            % (cc.fmt_qty(o["qty"], m.get("step")), P(unit), cc.fmt_money(loss),
@@ -294,6 +300,9 @@ def print_results(results, cfg, stats):
             bits = []
             if facts.get("loss_usd") is not None:
                 bits.append("max loss %s (limit %s)" % (cc.fmt_money(facts["loss_usd"]), cc.fmt_money(float(cfg["max_loss_per_trade_usd"]))))
+            if facts.get("stop_cost_r") is not None:
+                lim = cc.cost_limit(cfg)
+                bits.append("costs %.2fR at a stop-out%s" % (facts["stop_cost_r"], (" (max %gR)" % lim) if lim else ""))
             if facts.get("reward_risk") is not None:
                 bits.append("reward:risk %.2f (min %g)" % (facts["reward_risk"], float(cfg.get("min_reward_risk") or 0)))
             if facts.get("liq"):

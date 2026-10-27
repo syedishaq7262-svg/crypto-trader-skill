@@ -1,0 +1,265 @@
+{
+  "version": 1,
+  "made_by": "tools/backtest.py",
+  "source": "2026-10-27-binance-90d-trades.csv.gz",
+  "venue": "binance",
+  "venue_label": "Binance USD-M futures",
+  "coins": 40,
+  "from": 1785304800000,
+  "to": 1793080800000,
+  "from_utc": "2026-07-29 06:00 UTC",
+  "to_utc": "2026-10-27 06:00 UTC",
+  "days": 90,
+  "target_r": 2.0,
+  "hold_hours": 24.0,
+  "code": null,
+  "cost_limit_r": 0.2,
+  "costs_estimated": true,
+  "evidence_days": 30,
+  "evidence_min_trades": 5,
+  "range_z": 2.69,
+  "range_note": "lo and hi: the average's 90% range widened for 14 groups tested at once",
+  "all": {
+    "n": 27566,
+    "avg_r": -0.1792,
+    "avg_gross_r": 0.0196
+  },
+  "checks": {
+    "every": {
+      "n": 18462,
+      "avg_r": -0.1633,
+      "first_half": -0.2144,
+      "second_half": -0.1123
+    },
+    "cost": {
+      "n": 12235,
+      "avg_r": -0.0489,
+      "first_half": -0.1006,
+      "second_half": 0.0037
+    },
+    "record": {
+      "n": 5426,
+      "avg_r": -0.0469,
+      "first_half": -0.0741,
+      "second_half": -0.0209
+    },
+    "both": {
+      "n": 4314,
+      "avg_r": 0.0139,
+      "first_half": 0.0032,
+      "second_half": 0.0243
+    }
+  },
+  "setups": {
+    "orb-utc|long": {
+      "n": 1674,
+      "avg_r": -0.367,
+      "lo": -0.4667,
+      "hi": -0.2673,
+      "avg_gross_r": -0.033,
+      "win_rate": 0.3238,
+      "checked": {
+        "n": 117,
+        "avg_r": -0.2099,
+        "lo": -0.5594,
+        "hi": 0.1396,
+        "of": 1095
+      }
+    },
+    "orb-utc|short": {
+      "n": 1528,
+      "avg_r": -0.4971,
+      "lo": -0.597,
+      "hi": -0.3972,
+      "avg_gross_r": -0.1422,
+      "win_rate": 0.2853,
+      "checked": {
+        "n": 64,
+        "avg_r": -0.3757,
+        "lo": -0.8225,
+        "hi": 0.0711,
+        "of": 1049
+      }
+    },
+    "orb-ny|long": {
+      "n": 1177,
+      "avg_r": -0.2249,
+      "lo": -0.3417,
+      "hi": -0.1082,
+      "avg_gross_r": 0.0204,
+      "win_rate": 0.3441,
+      "checked": {
+        "n": 158,
+        "avg_r": -0.0099,
+        "lo": -0.3189,
+        "hi": 0.2992,
+        "of": 753
+      }
+    },
+    "orb-ny|short": {
+      "n": 1229,
+      "avg_r": -0.1556,
+      "lo": -0.2703,
+      "hi": -0.0409,
+      "avg_gross_r": 0.081,
+      "win_rate": 0.3645,
+      "checked": {
+        "n": 255,
+        "avg_r": 0.1291,
+        "lo": -0.1204,
+        "hi": 0.3785,
+        "of": 866
+      }
+    },
+    "breakout|long": {
+      "n": 3393,
+      "avg_r": -0.0976,
+      "lo": -0.1657,
+      "hi": -0.0295,
+      "avg_gross_r": 0.0742,
+      "win_rate": 0.3613,
+      "checked": {
+        "n": 742,
+        "avg_r": 0.0167,
+        "lo": -0.1264,
+        "hi": 0.1598,
+        "of": 2220
+      }
+    },
+    "breakout|short": {
+      "n": 2557,
+      "avg_r": -0.238,
+      "lo": -0.3134,
+      "hi": -0.1626,
+      "avg_gross_r": -0.0399,
+      "win_rate": 0.3262,
+      "checked": {
+        "n": 339,
+        "avg_r": 0.0604,
+        "lo": -0.1491,
+        "hi": 0.2698,
+        "of": 1842
+      }
+    },
+    "squeeze|long": {
+      "n": 694,
+      "avg_r": 0.0104,
+      "lo": -0.1341,
+      "hi": 0.1549,
+      "avg_gross_r": 0.1537,
+      "win_rate": 0.402,
+      "checked": {
+        "n": 113,
+        "avg_r": 0.0663,
+        "lo": -0.2724,
+        "hi": 0.405,
+        "of": 457
+      }
+    },
+    "squeeze|short": {
+      "n": 668,
+      "avg_r": -0.1651,
+      "lo": -0.3075,
+      "hi": -0.0226,
+      "avg_gross_r": -0.0152,
+      "win_rate": 0.3503,
+      "checked": {
+        "n": 95,
+        "avg_r": 0.3344,
+        "lo": -0.0318,
+        "hi": 0.7006,
+        "of": 440
+      }
+    },
+    "trend|long": {
+      "n": 3568,
+      "avg_r": -0.0968,
+      "lo": -0.1626,
+      "hi": -0.031,
+      "avg_gross_r": 0.0742,
+      "win_rate": 0.3638,
+      "checked": {
+        "n": 872,
+        "avg_r": -0.0302,
+        "lo": -0.1603,
+        "hi": 0.0998,
+        "of": 2292
+      }
+    },
+    "trend|short": {
+      "n": 3303,
+      "avg_r": -0.2492,
+      "lo": -0.3168,
+      "hi": -0.1817,
+      "avg_gross_r": -0.009,
+      "win_rate": 0.3424,
+      "checked": {
+        "n": 302,
+        "avg_r": -0.125,
+        "lo": -0.3375,
+        "hi": 0.0874,
+        "of": 2266
+      }
+    },
+    "reversal|long": {
+      "n": 342,
+      "avg_r": 0.066,
+      "lo": -0.111,
+      "hi": 0.243,
+      "avg_gross_r": 0.1609,
+      "win_rate": 0.4708,
+      "checked": {
+        "n": 28,
+        "avg_r": 0.3133,
+        "lo": -0.2133,
+        "hi": 0.8398,
+        "of": 268
+      }
+    },
+    "reversal|short": {
+      "n": 635,
+      "avg_r": -0.2122,
+      "lo": -0.3333,
+      "hi": -0.0911,
+      "avg_gross_r": -0.1417,
+      "win_rate": 0.3795,
+      "checked": {
+        "n": 56,
+        "avg_r": -0.0469,
+        "lo": -0.4909,
+        "hi": 0.3971,
+        "of": 407
+      }
+    },
+    "volume|long": {
+      "n": 3226,
+      "avg_r": -0.0208,
+      "lo": -0.0903,
+      "hi": 0.0487,
+      "avg_gross_r": 0.1311,
+      "win_rate": 0.385,
+      "checked": {
+        "n": 840,
+        "avg_r": 0.0848,
+        "lo": -0.0487,
+        "hi": 0.2182,
+        "of": 2085
+      }
+    },
+    "volume|short": {
+      "n": 3572,
+      "avg_r": -0.2016,
+      "lo": -0.2632,
+      "hi": -0.14,
+      "avg_gross_r": -0.0505,
+      "win_rate": 0.3371,
+      "checked": {
+        "n": 333,
+        "avg_r": -0.0245,
+        "lo": -0.2307,
+        "hi": 0.1817,
+        "of": 2422
+      }
+    }
+  }
+}

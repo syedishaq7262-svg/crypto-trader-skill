@@ -486,14 +486,57 @@ def compute(a, venue, cfg):
         hits.extend(setup_rs(ctxs, btc, a, sides))
     order = dict((s, i) for i, s in enumerate(ALL_SETUPS))
     hits.sort(key=lambda h: (order[h["setup"]], h["status"] == "back inside", -(h["rvol"] or 0), -(h["volume_24h"] or 0)))
+    limit = stop_costs(hits, venue, cfg, workers)
     data = {
         "mode": "scan", "venue": venue.name, "venue_label": venue.label,
         "as_of": now, "as_of_utc": cc.fmt_utc(now), "session": a.session, "or_minutes": a.or_minutes,
         "params": params_of(a),
         "setups": setups, "sides": sides, "universe": len(universe), "scanned": len(ctxs),
-        "left_out": why, "failed": failed, "notes": notes, "hits": hits,
+        "left_out": why, "failed": failed, "notes": notes, "hits": hits, "cost_limit_r": limit,
     }
     return data
+
+
+def stop_costs(hits, venue, cfg, workers=8):
+    """Each hit's stop-out cost in R when entering at its trigger (fees, and slippage read from the coin's own order
+    book), and whether that is over the cost rule's limit. Returns the limit (None when the rule is off)."""
+    limit = cc.cost_limit(cfg)
+    base = cc.cost_rates(venue, cfg)
+    stopped = [h for h in hits if h["side"] in cc.SIDES and h.get("stop_ref") is not None and h.get("trigger")]
+    slips = {}
+    if base["slippage"] is None and stopped:
+        syms = sorted(set(h["symbol"] for h in stopped))
+        for sym, r, e in cc.parallel(lambda s: cc.measure_slippage(venue, s)[0], syms, workers=workers):
+            slips[sym] = r if e is None else cc.DEFAULT_SLIPPAGE
+    for h in stopped:
+        stop = h["stop_ref_raw"] if h.get("stop_ref_raw") is not None else h["stop_ref"]
+        if cc.side_sign(h["side"]) * (h["trigger"] - stop) <= 0:
+            continue
+        costs = dict(base, slippage=slips.get(h["symbol"], base["slippage"] or cc.DEFAULT_SLIPPAGE))
+        h["stop_cost_r"] = round(cc.stop_cost_r(h["trigger"], stop, costs), 4)
+        h["too_tight"] = cc.over_cost_limit(h["stop_cost_r"], limit)
+    return limit
+
+
+def cost_cell(h):
+    c = h.get("stop_cost_r")
+    if c is None:
+        return "-"
+    return "%.2fR%s" % (c, " over" if h.get("too_tight") else "")
+
+
+def backtest_note(setup, session):
+    """'backtest: longs -0.10R, shorts -0.24R a trade after costs', from the published walk-forward backtest."""
+    if setup == "rs":
+        return None
+    parts = []
+    for side in cc.SIDES:
+        e = cc.track_entry(setup, side, session)
+        if e and e.get("n"):
+            parts.append("%ss %+.2fR" % (side, e["avg_r"]))
+    if not parts:
+        return None
+    return "backtest%s: %s a trade after costs" % (" of the break" if setup == "squeeze" else "", ", ".join(parts))
 
 
 def _lvl(h, key):
@@ -512,18 +555,23 @@ def print_scan(d, venue, a):
     by = {}
     for h in d["hits"]:
         by.setdefault(h["setup"], []).append(h)
+    notes_shown = []
     for s in d["setups"]:
         rows = by.get(s, [])
         cc.out("")
         failed_orb = []
+        note = backtest_note(s, d["session"])
+        if note:
+            notes_shown.append(s)
         if s == "orb":
             so = cc.last_session_open(d["session"], d["as_of"])
-            cc.out("%s | %s open at %s | %d-minute range" % (TITLES[s], SESSION_NAMES[d["session"]],
-                                                            cc.fmt_utc(so, date=False), d["or_minutes"]))
+            cc.out("%s | %s open at %s | %d-minute range%s" % (TITLES[s], SESSION_NAMES[d["session"]],
+                                                              cc.fmt_utc(so, date=False), d["or_minutes"],
+                                                              (" | " + note) if note else ""))
             failed_orb = [h for h in rows if h["status"] != "holding"]
             rows = [h for h in rows if h["status"] == "holding"]
         else:
-            cc.out(TITLES[s])
+            cc.out(TITLES[s] + ((" | " + note) if note else ""))
         if not rows:
             cc.out("  none")
         show = rows[:a.show]
@@ -535,12 +583,13 @@ def print_scan(d, venue, a):
             fp = lambda h, v: cc.fmt_price(v, h.get("tick"))
             tab = [[h["coin"], h["side"], "%s to %s" % (fp(h, h["metrics"]["or_low"]), fp(h, h["metrics"]["or_high"])),
                     "%s @ %s" % (fp(h, h["trigger"]), cc.fmt_utc(h["at"], date=False)), fp(h, h["price"]),
-                    "%.1fx" % h["rvol"] if h["rvol"] else "-", h["status"]] for h in show]
-            cc.out(cc.table(tab, ["coin", "side", "range", "trigger (5m close)", "now", "rvol", "status"], "lllrrrl"))
+                    "%.1fx" % h["rvol"] if h["rvol"] else "-", cost_cell(h), h["status"]] for h in show]
+            cc.out(cc.table(tab, ["coin", "side", "range", "trigger (5m close)", "now", "rvol", "stop cost", "status"],
+                            "lllrrrrl"))
         elif s == "breakout":
             tab = [[h["coin"], h["side"], _lvl(h, "level"), cc.fmt_price(h["trigger"], h.get("tick")),
-                    cc.fmt_pct(h["metrics"]["beyond_pct"]), "%.1fx" % h["rvol"], h["status"]] for h in show]
-            cc.out(cc.table(tab, ["coin", "side", "level", "15m close", "beyond", "rvol", "status"], "llrrrrl"))
+                    cc.fmt_pct(h["metrics"]["beyond_pct"]), "%.1fx" % h["rvol"], cost_cell(h), h["status"]] for h in show]
+            cc.out(cc.table(tab, ["coin", "side", "level", "15m close", "beyond", "rvol", "stop cost", "status"], "llrrrrrl"))
         elif s == "squeeze":
             coiled = [h for h in show if h["side"] == "both"]
             broke = [h for h in show if h["side"] != "both"]
@@ -551,25 +600,25 @@ def print_scan(d, venue, a):
             if broke:
                 cc.out("  Broke out of a squeeze (first 1h close outside the bands):")
                 tab = [[h["coin"], h["side"], "%s @ %s" % (cc.fmt_price(h["trigger"], h.get("tick")), cc.fmt_utc(h["at"], date=False)),
-                        _lvl(h, "level"), _lvl(h, "stop_ref")] for h in broke]
-                cc.out(cc.table(tab, ["coin", "side", "1h close", "band", "middle band"], "llrrr"))
+                        _lvl(h, "level"), _lvl(h, "stop_ref"), cost_cell(h)] for h in broke]
+                cc.out(cc.table(tab, ["coin", "side", "1h close", "band", "middle band", "stop cost"], "llrrrr"))
         elif s == "trend":
             tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"], h.get("tick")), _lvl(h, "level"), _lvl(h, "stop_ref"),
-                    cc.fmt_pct(h["metrics"]["pullback_pct"], plus=False), h["status"]] for h in show]
-            cc.out(cc.table(tab, ["coin", "side", "15m close", "15m EMA20", "pullback extreme", "pullback", "status"],
-                            "llrrrrl"))
+                    cc.fmt_pct(h["metrics"]["pullback_pct"], plus=False), cost_cell(h), h["status"]] for h in show]
+            cc.out(cc.table(tab, ["coin", "side", "15m close", "15m EMA20", "pullback extreme", "pullback", "stop cost",
+                                  "status"], "llrrrrrl"))
             if any(h["status"] == "extended" for h in show):
                 cc.out("  extended: the bar closed more than %g ATRs past its 20 average, a chase rather than a pullback entry"
                        % TREND_MAX_ATR)
         elif s == "reversal":
             tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"], h.get("tick")),
                     "%.0f -> %.0f" % (h["metrics"].get("rsi_min", h["metrics"].get("rsi_max")), h["metrics"]["rsi_now"]),
-                    cc.fmt_pct(h["metrics"]["move_24h"]), _lvl(h, "stop_ref")] for h in show]
-            cc.out(cc.table(tab, ["coin", "side", "1h close", "RSI", "24h", "6h extreme"], "llrrrr"))
+                    cc.fmt_pct(h["metrics"]["move_24h"]), _lvl(h, "stop_ref"), cost_cell(h)] for h in show]
+            cc.out(cc.table(tab, ["coin", "side", "1h close", "RSI", "24h", "6h extreme", "stop cost"], "llrrrrr"))
         elif s == "volume":
             tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"], h.get("tick")), cc.fmt_pct(h["metrics"]["move_pct"]),
-                    "%.1fx" % h["rvol"], "%.1f ATR" % h["metrics"]["move_atr"]] for h in show]
-            cc.out(cc.table(tab, ["coin", "side", "15m close", "move", "rvol", "size"], "llrrrr"))
+                    "%.1fx" % h["rvol"], "%.1f ATR" % h["metrics"]["move_atr"], cost_cell(h)] for h in show]
+            cc.out(cc.table(tab, ["coin", "side", "15m close", "move", "rvol", "size", "stop cost"], "llrrrrr"))
         elif s == "rs":
             tab = [[h["coin"], h["status"], cc.fmt_pct(h["metrics"]["move_24h"]), cc.fmt_pct(h["metrics"]["btc_24h"]),
                     "%.2f" % h["metrics"]["beta"], cc.fmt_pct(h["metrics"]["excess_24h"])] for h in show]
@@ -582,6 +631,12 @@ def print_scan(d, venue, a):
         cc.out("")
         cc.out("Could not read %d coin(s): %s" % (len(d["failed"]), ", ".join(f["symbol"] for f in d["failed"][:6])))
     cc.out("")
+    if any(h.get("stop_cost_r") is not None for h in d["hits"]):
+        lim = d.get("cost_limit_r")
+        cc.out("Stop cost: what fees and slippage take from a stop-out when entering at the trigger, in R. %s" % (
+            ("Over %gR (max_cost_r) crypto-risk blocks the trade." % lim) if lim else "The cost rule is off (max_cost_r)."))
+    if notes_shown:
+        cc.out("Backtest: each setup's average trade after costs in the walk-forward backtest (%s)." % cc.track_source())
     n = len(d["hits"])
     coins = len(set(h["coin"] for h in d["hits"]))
     cc.out("%d hit%s across %d coin%s. A scan lists charts that match a rule; it is not a list of coins to buy."

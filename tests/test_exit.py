@@ -2,11 +2,13 @@
 
 import json
 import math
+import re
 import unittest
 
-from _load import cc, Session
+from _load import cc, load, Session
 
 EXIT = ("crypto-exit", "exit")
+EXITM = load("crypto-exit", "exit")
 SCAN = ("crypto-scanner", "scan")
 
 
@@ -39,6 +41,14 @@ class FromAHit(unittest.TestCase):
             for line in ("Entry", "Stop", "Target", "Risk", "Reward:risk", "Costs", "Funding", "Break-even", "Out by",
                          "A stop is a plan, not a guarantee"):
                 self.assertIn(line, out)
+            self.assertIn("  Backtest     New York opening-range breakout longs: -0.22R a trade after costs over 1,177 trades "
+                          "(Binance, 40 coins, 29 Jul to 27 Oct 2026)", out)
+            self.assertIn("with both checks (the cost rule, a positive 30-day record): -0.01R over 158 (can't be told from zero)", out)
+            s.run(*EXIT, ["plan", "SOL", "--side", "long", "--manual", "--venue", "binance"])
+            self.assertEqual(EXITM.backtest_lines(plan_of(s)), [])                   # no setup, no record
+            p = plan_of(s)
+            p["setup"] = {"name": "orb", "params": {"session": "tokyo"}}
+            self.assertIn("not the Tokyo one", EXITM.backtest_lines(p)[0])
 
     def test_fresh_trigger_is_the_entry_and_a_short_is_mirrored(self):
         with Session() as s:
@@ -155,7 +165,20 @@ class Manual(unittest.TestCase):
             w = " ".join(plan_of(s)["warnings"])
             self.assertIn("Funding is +104% a year against this side", w)
             self.assertIn("under your 1.5 minimum", w)
+            self.assertIn("over your 0.2R limit (max_cost_r): crypto-risk will block it", w)
+            # the stop distance it names does pass
+            pct = re.search(r"a coin \(([0-9.]+)%\) from the entry would pass", w).group(1)
+            s.run(*EXIT, ["plan", "FUNDX", "--side", "long", "--manual", "--venue", "binance", "--stop", "pct:" + pct])
+            p = plan_of(s)
+            self.assertLessEqual(round(p["costs"]["entry_r"] + p["costs"]["stop_exit_r"], 2), 0.2)
+            self.assertNotIn("max_cost_r", " ".join(p["warnings"]))
+
+    def test_cost_rule_off_still_warns(self):
+        with Session(config={"max_cost_r": 0}) as s:
+            s.run(*EXIT, ["plan", "FUNDX", "--side", "long", "--manual", "--venue", "binance", "--stop", "pct:0.3"])
+            w = " ".join(plan_of(s)["warnings"])
             self.assertIn("tight for the costs", w)
+            self.assertNotIn("crypto-risk will block it. A stop", w)
 
     def test_priced_per_thousand(self):
         with Session() as s:

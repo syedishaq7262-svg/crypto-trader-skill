@@ -35,8 +35,17 @@ TIERS = ("edge", "watch", "no_edge", "untested")
 TIER_TITLES = {"edge": "Has the evidence here", "watch": "Worth watching (positive, not proven)",
                "no_edge": "No edge on this coin lately", "untested": "Cannot be tested (no fixed entry rule)"}
 FRESH_WATCH_MS = 15 * 60000
+SPARES = 10                    # extra candidates to try when the cost rule leaves some out
 STATUS_RANK = {"fresh": 0, "holding": 0, "spike": 0, "reclaimed": 1, "rejected": 1, "turning up": 1,
                "turning down": 1, "broke up": 1, "broke down": 1, "leader": 2, "laggard": 2}
+
+
+class TooTight(Exception):
+    """The plan's stop-out would cost more than the cost rule allows: crypto-risk would block it."""
+
+    def __init__(self, cost, limit):
+        Exception.__init__(self, "a stop-out would cost %.2fR" % cost)
+        self.cost, self.limit = cost, limit
 
 
 def sibling(folder, name):
@@ -134,6 +143,10 @@ def assess(h, venue, cfg, mods, regime, params, scanned_at, a):
     a1h = cc.atr(b1h, 14)[-1]
     plan, entry_words = exitm.build_plan(venue, m, h["side"], cfg, hit=h, params=params, scanned_at=scanned_at,
                                          data=(tk, b5, b15, b1h, a15, a1h))
+    lim = cc.cost_limit(cfg)
+    cost = plan["costs"]["entry_r"] + plan["costs"]["stop_exit_r"]
+    if cc.over_cost_limit(cost, lim):
+        raise TooTight(cost, lim)            # crypto-risk would block it: no need to replay it
     entry_time = (plan["entry_time"] // cc.STEP5) * cc.STEP5
     funding = venue.funding_history(m["symbol"], entry_time - pool_days * cc.DAY_MS, entry_time)
     pool = [b for b in bars_all if b[T] < entry_time]
@@ -150,7 +163,8 @@ def assess(h, venue, cfg, mods, regime, params, scanned_at, a):
     flags = flags_for(h, plan, tk, regime, ctx, cfg)
     return {"coin": m["coin"], "symbol": m["symbol"], "side": h["side"], "setup": h["setup"], "status": h.get("status"),
             "at": h.get("at"), "plan": plan, "entry_words": entry_words, "tm": slim_tm(data), "flags": flags,
-            "crowding": ctx.get("crowding")}
+            "crowding": ctx.get("crowding"), "session": (params or {}).get("session"),
+            "backtest": cc.track_entry(h["setup"], h["side"], (params or {}).get("session"))}
 
 
 FDR = 0.10
@@ -205,7 +219,7 @@ def flags_for(h, plan, tk, regime, ctx, cfg):
     if apr is not None and sg * apr >= 0.30:
         soft.append("funding %s a year against the side" % cc.fmt_pct(apr, 0))
     c = plan.get("costs") or {}
-    if c.get("entry_r", 0) + c.get("stop_exit_r", 0) > 0.2:
+    if c.get("entry_r", 0) + c.get("stop_exit_r", 0) > 0.2:          # only reached when the cost rule is off
         soft.append("costs %.2fR at a stop-out" % (c["entry_r"] + c["stop_exit_r"]))
     if (tk.get("quote_volume") or 0) < float(cfg.get("min_quote_volume_usd") or 0):
         soft.append("thin: %s in 24h" % cc.fmt_usd(tk.get("quote_volume")))
@@ -257,6 +271,11 @@ def line_for(i, c):
             if c.get("passes_fdr"):
                 ev += " (still clear after testing %d setups at once)" % c.get("fdr_tests", 0)
     out.append("     " + ev)
+    parts = cc.track_parts(c["setup"], c["side"], c.get("session"))
+    if parts:
+        words = cc.TRACK_WORDS.get(cc.track_key(c["setup"], c.get("session")), c["setup"])
+        out.append("     backtest: %s %ss %s%s" % (words, c["side"], parts[0],
+                                                  ("; with both checks " + parts[1]) if parts[1] else ""))
     out.append("     plan: entry %s, stop %s, target %s (%.1fR), out within %gh; replays: %s" % (
         P(p["entry"]), P(p["stop"]), P(p["target"]), p["target_r"], p["hold_hours"],
         tm["verdict"]["mc"].split(":")[0].lower()))
@@ -280,16 +299,36 @@ def board(a, cfg):
     fresher = None
     if skipped["past the entry window"]:
         fresher = scan.fresher_session(params.get("session") or "utc", int(params.get("or_minutes") or 30), cc.now_ms())
-    testable = [h for h in cands if h["setup"] in TESTABLE][:a.top]
-    untested = [h for h in cands if h["setup"] not in TESTABLE][:max(0, a.top - len(testable))]
-    todo = testable + untested
-    results, failures = [], []
-    for k, h in enumerate(todo, 1):
-        sys.stderr.write("Testing %d of %d: %s %s %s\n" % (k, len(todo), h["coin"], h["side"], h["setup"]))
+    testable = [h for h in cands if h["setup"] in TESTABLE]
+    untested = [h for h in cands if h["setup"] not in TESTABLE]
+    plan_n = min(a.top, len(testable))
+    results, failures, tight = [], [], []
+    tries = 0
+    for h in testable:
+        if len(results) + len(failures) >= plan_n or tries >= a.top + SPARES:
+            break
+        tries += 1
+        sys.stderr.write("Testing %d of %d: %s %s %s\n" % (len(results) + len(failures) + 1, plan_n, h["coin"], h["side"],
+                                                         h["setup"]))
         try:
-            results.append(assess(h, venue, cfg, (exitm, tm, scan), regime, params, watch.get("as_of"), a))
+            res = assess(h, venue, cfg, (exitm, tm, scan), regime, params, watch.get("as_of"), a)
+        except TooTight as e:
+            sys.stderr.write("Left out: %s %s %s, %s\n" % (h["coin"], h["side"], h["setup"], e))
+            tight.append({"coin": h["coin"], "side": h["side"], "setup": h["setup"], "cost_r": round(e.cost, 4)})
+            continue
         except cc.CryptoError as e:
             failures.append({"coin": h["coin"], "setup": h["setup"], "side": h["side"], "error": str(e)})
+            continue
+        results.append(res)
+    for h in untested[:max(0, a.top - len(results) - len(failures))]:
+        try:
+            results.append(assess(h, venue, cfg, (exitm, tm, scan), regime, params, watch.get("as_of"), a))
+        except TooTight as e:
+            tight.append({"coin": h["coin"], "side": h["side"], "setup": h["setup"], "cost_r": round(e.cost, 4)})
+        except cc.CryptoError as e:
+            failures.append({"coin": h["coin"], "setup": h["setup"], "side": h["side"], "error": str(e)})
+    skipped["stops too tight for the costs"] = ["%s %s %s %.2fR" % (t["coin"], t["side"], NAMES.get(t["setup"], t["setup"]),
+                                                                    t["cost_r"]) for t in tight]
     # one p-value per tested setup with a positive record; correct for testing them together
     tested = [c for c in results if c["tm"]["baseline"] and (c["tm"]["history"].get("avg_r") or 0) > 0]
     ok = bh_passes([c["tm"]["baseline"]["luck_p"] for c in tested])
@@ -308,7 +347,9 @@ def board(a, cfg):
             "watchlist_as_of": watch.get("as_of"), "watchlist_reused": reused, "live_setups": len(watch.get("hits") or []),
             "tested": len(results), "skipped": skipped, "failures": failures, "candidates": results,
             "entry_window_ms": float((watch.get("params") or {}).get("entry_hours") or 4) * cc.HOUR_MS,
-            "fresher_session": list(fresher) if fresher else None,
+            "fresher_session": list(fresher) if fresher else None, "cost_limit_r": cc.cost_limit(cfg),
+            "backtest_source": cc.track_source() if cc.track_record() else None,
+            "backtest_cost_limit_r": (cc.track_record() or {}).get("cost_limit_r"),
             "params": {"top": a.top, "replays": a.replays, "seed": a.seed}}
     if not a.no_write:
         cc.write_json(cc.wpath("scout.json"), data)
@@ -344,6 +385,9 @@ def print_board(d):
             line += " For a fresh range: scout.py --session %s (the %s open, %s ago)." % (
                 fr[0], cc.SESSION_NAMES.get(fr[0], fr[0]), cc.fmt_dur(d["as_of"] - fr[1]))
         cc.out(line)
+    if sk.get("stops too tight for the costs"):
+        cc.out("Left out, stops too tight for the costs (fees and slippage over %gR at a stop-out, which crypto-risk "
+               "blocks): %s." % (d.get("cost_limit_r") or 0, ", ".join(sk["stops too tight for the costs"][:8])))
     by = {}
     for c in d["candidates"]:
         by.setdefault(c["tier"], []).append(c)
@@ -363,6 +407,10 @@ def print_board(d):
     if not by.get("edge"):
         cc.out("Nothing has the evidence today: no setup beat random entries on its own coin's last 30 days "
                "clearly enough to survive testing them all at once, with nothing against it. Not trading is a position too.")
+    if d.get("backtest_source") and any(cc.track_parts(c["setup"], c["side"], c.get("session")) for c in d["candidates"]):
+        cc.out("Backtest lines: the walk-forward backtest on %s. Both checks: a stop-out costs at most %gR, and the "
+               "setup made money on that coin over its last 30 days." % (d["backtest_source"],
+                                                                         d.get("backtest_cost_limit_r") or 0.2))
     cc.out("Evidence, not a promise or advice. To take one further: scout.py pick N, then /crypto-budget.")
 
 

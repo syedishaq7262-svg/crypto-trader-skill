@@ -20,7 +20,8 @@ you risk a dollar.
 
 Every setup with a stop was also backtested walk-forward: 27,566 trades over
 90 days of real Binance prices, with fake money. The results are
-[below](#backtest-27566-trades-on-real-past-prices), losses included.
+[below](#backtest-27566-trades-on-real-past-prices), losses included, and
+the pack now shows each setup's record wherever it shows the setup.
 
 No trade goes through until you say yes. Nothing in this pack can place an
 order on its own. Paper trading is the default, and it is not a testnet: it
@@ -79,7 +80,7 @@ computer.
 | `/crypto-timemachine` | Time Machine | Replays the trade 10,000 times from the coin's own candles, re-runs the setup's own history, and tests it against random entries. |
 | `/crypto-budget` | Budget Manager | Sizes the position to your max loss per trade, your margin cap and your leverage cap. |
 | `/crypto-liquidation` | Liquidation Guard | Where liquidation sits, how often a move that big came within a day, and the leverage that keeps it far behind your stop. |
-| `/crypto-risk` | Risk Manager | Checks every order against your limits: max loss, daily loss, trades a day, open positions, reward to risk, a cooldown after losses. |
+| `/crypto-risk` | Risk Manager | Checks every order against your limits: max loss, daily loss, trades a day, open positions, reward to risk, what fees and slippage take from a stop-out, a cooldown after losses. |
 | `/crypto-broker` | Order Executor | Paper by default, at live prices. Live on Binance or Bybit with your own keys. Never without your typed yes. |
 | `/crypto-alerts` | Alerts | Rings on a price, a move, funding, your stop or target, a position near liquidation, or a macro release. |
 | `/crypto-journal` | Trading Journal | Your record with honest ranges: win rate, break-even, drawdown, costs, and the habits that cost money. |
@@ -165,7 +166,7 @@ BTC is a ranking with no stop, so it is left out. 27,566 trades in all.
 | profit factor | 0.77 |
 | against random entries (same times of day, same stops and targets) | +0.06R a trade better |
 | the Scout's first test as it stood at the time (5,426 trades) | -0.05R a trade, against -0.16R for every signal over the same weeks |
-| a $1,000 paper account under the pack's limits ($10 at risk, 2 open, 4 a day) | $516.95 after 241 trades; $562.97 with the Scout's first test |
+| a $1,000 paper account under the pack's limits ($10 at risk, 2 open, 4 a day), the last 60 days, run 100 times | lost money in 96 of 100 runs; the median run ended at $721 |
 
 What it says:
 
@@ -185,32 +186,93 @@ What it says:
   | 1% to 2% | 8,822 | +0.02R | -0.14R |
   | 2% or more | 7,846 | +0.01R | -0.08R |
 
-- **Checking the evidence first helped, but did not make it profitable.**
-  Taking a setup only when its own last 30 days on that coin had made money
-  after costs, over at least 5 trades (the Scout's first test, judged with
-  only what was known at the time), cut the loss from -0.16R to -0.05R a
-  trade.
+  Over the 90 days, the 10,209 trades whose stop-out would have cost more
+  than 0.2R were even before costs (-0.01R) and lost 0.38R a trade after
+  them.
 - **No setup clearly made money.** RSI reversal longs (+0.07R over 342
   trades) and squeeze-break longs (+0.01R over 694) were the only ones above
   zero, and neither result can be told apart from zero. The opening range of
   the UTC day was the worst: -0.37R long and -0.50R short.
 
-What the pack does about it: the Scout tests each setup on its own coin
-before you trade it and says "nothing today" when nothing qualifies, the
-Exit Planner warns when fees and slippage would cost more than 0.2R on a
-stop-out, the Risk Manager caps the damage, and paper trading is the
-default.
+### What the trades taught us
+
+We split the trades in two by time and kept only the lessons that held in
+both halves. Two rules did, and both were in the pack before the backtest:
+the cost rule (skip a trade when fees and slippage would take more than
+0.2R from a stop-out; the Exit Planner already warned at that line) and the
+30-day check (take a setup only when it made money after costs on that coin
+over its last 30 days, at least 5 trades; the Scout's first test). Because
+they came first, this was a fair test of them, not a rule fitted to these
+trades.
+
+| average a trade, after costs | 28 Aug to 27 Sep | 27 Sep to 27 Oct | trades |
+| --- | --- | --- | --- |
+| every signal | -0.21R | -0.11R | 18,462 |
+| the cost rule | -0.10R | +0.00R | 12,235 |
+| the 30-day check | -0.07R | -0.02R | 5,426 |
+| both | +0.00R | +0.02R | 4,314 |
+
+The 30-day check needs 30 days of history, so the table covers the last 60
+of the 90 days. Together the two rules come out about even: they cut the
+losses; they do not make money.
+
+What did not hold, worked out from the same trades: longs did better in one
+month and shorts in the other, which is the market's mood, not a rule;
+trading only with BTC's trend (longs above a rising 20-day average, shorts
+below a falling one) did no better than taking every signal; and picking
+setups by how they did across all coins the month before helped in one
+half and hurt in the other.
+
+The $1,000 paper account takes whatever fires first each day, so one run
+says more about one hour than about the rules: run the original way, 153 of
+its 237 trades came in the hour after midnight UTC, when the day's count
+starts again. It now runs 100 times, each run starting its day at a random
+hour, as a trader's day starts at midnight wherever they live:
+
+| paper account, last 60 days, 100 runs | median end | middle 90% of runs | runs that lost |
+| --- | --- | --- | --- |
+| every signal | $721 | $417 to $933 | 96 |
+| the cost rule | $841 | $574 to $1,046 | 82 |
+| the 30-day check | $848 | $549 to $1,155 | 79 |
+| both | $951 | $689 to $1,183 | 65 |
+
+What the pack does with it:
+
+- **The cost rule is now a rule.** The Risk Manager blocks an order when
+  fees and slippage would take more than `max_cost_r` (0.2R) from a
+  stop-out. The Exit Planner says so and names the stop distance that would
+  pass, the Scout leaves those setups out and tests the next one in their
+  place, and the Scanner marks them.
+- **Every setup shows its record.** The Scout, the Scanner, the Coin Report
+  and the Exit Planner show the setup's result in this backtest next to it,
+  with and without both checks, and say "can't be told from zero" when the
+  range around a result, widened for testing 14 setup-and-side groups at
+  once, spans zero. The numbers ship in
+  [`crypto-setup/track_record.json`](crypto-setup/track_record.json); your
+  own run's `track_record.json`, copied into your `crypto/` folder, takes
+  its place.
+- The Scout still tests each setup on its own coin and says "nothing today"
+  when nothing qualifies, the Risk Manager caps the damage, and paper
+  trading is the default.
 
 Caveats: the coins are today's busiest, so coins that faded or were delisted
 are missing; past trades were charged today's fees and slippage; 90 days is
-one stretch of one market. Every trade and the full report are in
-[backtest/](backtest/), and you can run it yourself on Binance or Bybit, over
-any window (Hyperliquid keeps too little 5-minute history):
+one stretch of one market. The published run came before each trade's
+stop-out cost was saved, so the cost rule's numbers here rebuild it from
+each coin's own stop-outs; runs from this version save it exactly. Every
+trade, the original report and the checks report are in
+[backtest/](backtest/), and you can run it yourself on Binance or Bybit,
+over any window (Hyperliquid keeps too little 5-minute history):
 
 ```bash
 python3 tools/backtest.py                        # the 40 busiest coins, the last 90 days
+python3 tools/backtest.py --end 2026-07-29       # the 90 days before 29 July
 python3 tools/backtest.py --coins 20 --days 60 --venue bybit
+python3 tools/backtest.py --trades backtest/2026-10-27-binance-90d-trades.csv.gz --venue binance --end "2026-10-27 06:00"
 ```
+
+The last one rebuilds the checks report and the track record from the
+published trades, without downloading anything.
 
 ## The tools
 
@@ -254,6 +316,7 @@ first:
 | `max_trades_per_day` | 4 | new entries a day |
 | `max_open_positions` | 2 | positions and resting orders at once |
 | `min_reward_risk` | 1.5 | the smallest target, in multiples of the risk |
+| `max_cost_r` | 0.2 | the most fees and slippage may take from a stop-out, in R; past it the Risk Manager blocks the trade (`0`: off) |
 | `max_leverage` | 3 | leverage cap; `margin_mode` stays isolated |
 | `cooldown_after_losses` | 2 | losses in a row before a 12-hour pause |
 | `paper` | true | simulated fills at live prices; `false` only when you mean it |
@@ -266,12 +329,12 @@ first:
 python3 -m unittest discover -s tests -v
 ```
 
-The tests run offline in a minute or two, on a fake exchange that answers in
-Binance's, Bybit's and Hyperliquid's real response formats (checked against
-real recorded responses in `tests/fixtures/real`), with a synthetic market
-built to contain known setups. They also play the failures: a country
-block, rate limits, timeouts, a garbled candle, an order whose reply never
-arrives, a stop the exchange refuses.
+The tests run offline in two or three minutes, on a fake exchange that
+answers in Binance's, Bybit's and Hyperliquid's real response formats
+(checked against real recorded responses in `tests/fixtures/real`), with a
+synthetic market built to contain known setups. They also play the
+failures: a country block, rate limits, timeouts, a garbled candle, an order
+whose reply never arrives, a stop the exchange refuses.
 
 To check everything against the real exchanges from your own computer:
 
@@ -352,7 +415,7 @@ advice.
 ## Files
 
 ```
-crypto-setup/        SKILL.md, setup.py, cryptocore.py (shared by every skill), config.example.json
+crypto-setup/        SKILL.md, setup.py, cryptocore.py (shared by every skill), config.example.json, track_record.json
 crypto-scout/        SKILL.md, scout.py
 crypto-scanner/      SKILL.md, scan.py
 crypto-coin/         SKILL.md, coin.py
@@ -369,7 +432,7 @@ crypto-broker/       SKILL.md, broker.py, exchanges.py
 crypto-alerts/       SKILL.md, alerts.py
 crypto-journal/      SKILL.md, journal.py
 tools/               live_check.py: every skill against the real exchanges; backtest.py: the walk-forward backtest
-backtest/            the published backtest: the report and every trade (CSV, gzipped)
+backtest/            the published backtest: the report, the checks report and every trade (CSV, gzipped)
 tests/               unittest suite, a fake exchange, real recorded responses
 ```
 

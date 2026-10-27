@@ -314,7 +314,15 @@ def build_plan(venue, m, side, cfg, hit=None, params=None, scanned_at=None, entr
                         % cc.fmt_price(a15, m.get("tick")))
     if a1h and risk > 3.0 * a1h:
         warnings.append("Wide stop: more than three 1-hour ATRs. The position will be small.")
-    if c_in + c_stop > 0.2:
+    lim = cc.cost_limit(cfg)
+    if cc.over_cost_limit(c_in + c_stop, lim):
+        k = costs["taker"] + costs["slippage"]
+        need = 2.0 * entry * k / (lim + sg * k)          # the stop distance where a stop-out costs exactly the limit
+        warnings.append("Fees and slippage take %.2fR from a stop-out, over your %gR limit (max_cost_r): crypto-risk will "
+                        "block it. A stop at least %s a coin (%s) from the entry would pass, if a level there means "
+                        "something; otherwise skip the trade." % (c_in + c_stop, lim, cc.fmt_price(need * 1.01, m.get("tick")),
+                                                                  cc.fmt_pct(need * 1.01 / entry, 2, False)))
+    elif c_in + c_stop > 0.2:
         warnings.append("Fees and slippage cost %.2fR on a stop-out: the stop is tight for the costs." % (c_in + c_stop))
     if apr is not None and sg * apr >= 0.30:
         warnings.append("Funding is %s a year against this side: a full %gh hold costs about %.2fR."
@@ -399,12 +407,33 @@ def print_plan(p, entry_words=None, cfg=None):
     cc.out("  Break-even   the target must come first in %.1f%% of trades that hit a side (fees and slippage included)"
            % (p["breakeven_share"] * 100))
     cc.out("  Out by       %s (%gh), win or lose" % (cc.fmt_local(p["exit_by"]), p["hold_hours"]))
+    for i, line in enumerate(backtest_lines(p)):
+        cc.out(("  Backtest     " if i == 0 else "               ") + line)
     if p.get("multiplier", 1) != 1:
         cc.out("  Note         prices are per %s coins on this venue (%s)" % ("{:,}".format(p["multiplier"]), p["symbol"]))
     for w in p.get("warnings") or []:
         cc.out("  Warning      " + w)
     cc.out("A stop is a plan, not a guarantee: a fast market can fill past it.")
     cc.out("Next: /crypto-timemachine to replay this plan, then /crypto-budget to size it.")
+
+
+def backtest_lines(p):
+    """The published backtest's record for this plan's setup and side, in two lines (none for a plan with no setup)."""
+    s = p.get("setup") or {}
+    if not s.get("name"):
+        return []
+    session = (s.get("params") or {}).get("session")
+    parts = cc.track_parts(s["name"], p["side"], session)
+    if not parts:
+        if s["name"] == "orb" and session not in (None, "utc", "ny"):
+            return ["the backtest covers the UTC-day and New York opening ranges, not the %s one"
+                    % cc.SESSION_NAMES.get(session, session)]
+        return []
+    words = cc.TRACK_WORDS.get(cc.track_key(s["name"], session), s["name"])
+    out = ["%s %ss: %s (%s)" % (words, p["side"], parts[0], cc.track_source())]
+    if parts[1]:
+        out.append("with both checks (the cost rule, a positive 30-day record): %s" % parts[1])
+    return out
 
 
 def show_cmd(a):

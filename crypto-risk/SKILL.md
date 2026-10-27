@@ -7,7 +7,8 @@ description: >-
   exact order: the max loss per trade (fees, slippage and funding included,
   measured from the worse of the planned and the current price), the daily
   loss limit (today's net loss plus open risk plus this trade), trades per
-  day, open positions, no adding to an open position, reward:risk, leverage,
+  day, open positions, no adding to an open position, reward:risk, what fees
+  and slippage take from a stop-out (max_cost_r, 0.2R), leverage,
   isolated margin, the margin cap, liquidation distance against the stop,
   exchange minimums, a price that moved since the plan, thin coins, and a
   cooldown after a losing streak. Getting out is never blocked. Use when the
@@ -70,6 +71,7 @@ batch that is fine order by order but breaks a limit together is caught.
 | moved | the price is more than `--max-drift-r` (0.5R) from the planned entry |
 | loss | size x (the move to the stop + fees and slippage both ways + a full hold's funding when this side pays) over `max_loss_per_trade_usd` |
 | reward:risk | from the price now, under `min_reward_risk` |
+| costs | fees and slippage would take more than `max_cost_r` (0.2R) from a stop-out: a stop too tight for the coin's costs (`0` turns the rule off) |
 | daily loss | today's net loss + the risk still open on positions + this trade's max loss over `max_daily_loss_usd` |
 | leverage | over `max_leverage`, or over the venue's limit |
 | margin | not isolated while `allow_cross_margin` is false; margin over `max_margin_pct` of the account; margin in use plus this over the account |
@@ -103,7 +105,8 @@ over 10 or more trades, a limit through the price, no time limit.
    the stop against the limit, reward:risk, the liquidation buffer, and how
    much of today's limits it uses. For a BLOCK, give every reason and its
    fix (re-plan, a smaller size, a lower leverage, wait out the cooldown, or
-   skip the trade). Never change a limit or an order yourself.
+   skip the trade; for costs, skip it or re-plan with a wider stop at a real
+   level). Never change a limit or an order yourself.
 3. If the order changes in any way, run the check again: crypto-broker
    matches each order to its stamp by fingerprint, and a stamp lasts 15
    minutes.
@@ -116,7 +119,7 @@ ORBX order passes at 15:15, with the Time Machine's verdict as a warning:
 ```
 PASS  #1 long ORBX 26, entry, 2x isolated
           entry 21.456 (the plan's entry), stop 21.128, target 22.112
-          max loss $9.64 (limit $10.00), reward:risk 2.00 (min 1.5), liquidation 11.009, 31.9x the stop distance
+          max loss $9.64 (limit $10.00), costs 0.11R at a stop-out (max 0.2R), reward:risk 2.00 (min 1.5), liquidation 11.009, 31.9x the stop distance
           today before this: 0 of 4 trades, $0.00 lost, $0.00 at risk open; daily limit $30.00
         ! history: the setup lost 0.89R a trade after costs over its last 11 trades here
 
@@ -130,12 +133,21 @@ the stop, so the same order is blocked:
 ```
 BLOCK #1 long ORBX 26, entry, 2x isolated
           entry 21.494 (the price now), stop 21.128, target 22.112
-          max loss $10.70 (limit $10.00), reward:risk 1.69 (min 1.5), liquidation 11.028, 28.6x the stop distance
+          max loss $10.70 (limit $10.00), costs 0.09R at a stop-out (max 0.2R), reward:risk 1.69 (min 1.5), liquidation 11.028, 28.6x the stop distance
           today before this: 0 of 4 trades, $0.00 lost, $0.00 at risk open; daily limit $30.00
         - loss: 26 x 0.412 at the stop (fees, slippage, funding included) = $10.70, over your $10.00 max loss per trade
         ! history: the setup lost 0.89R a trade after costs over its last 11 trades here
 
 0 passed, 1 blocked at 2026-10-21 16:00 UTC. Nothing can be sent.
+```
+
+A SOL long planned with a 0.3% stop: fees and slippage would take 0.37R
+from a stop-out, so it is blocked, whatever else it gets right:
+
+```
+BLOCK #1 long SOL 8.730, entry, 3x isolated
+          max loss $6.15 (limit $10.00), costs 0.37R at a stop-out (max 0.2R), reward:risk 2.00 (min 1.5), liquidation 117.537, 105.2x the stop distance
+        - costs: fees and slippage would take 0.37R from a stop-out, over your 0.2R limit (max_cost_r): the stop is too tight for this coin's costs
 ```
 
 After two losing trades today and a BTC short still open, the 15:15 order is

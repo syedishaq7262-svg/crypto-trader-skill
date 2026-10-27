@@ -93,6 +93,24 @@ how often the target must come first, of the trades that hit a side, just
 to break even after costs. A 2R target needs about 35 to 38%; a 1R target
 needs over 50%.
 
+**The cost rule.** When fees and slippage would take more than `max_cost_r`
+(0.2R by default) from a stop-out, crypto-risk blocks the order. The plan
+says so and names the smallest stop distance that would pass. In the
+published backtest, the trades whose stop-out cost more than 0.2R broke
+about even before costs and lost 0.38R a trade after them: tight stops are
+where costs do their damage. A wider stop is only worth it at a level that
+means something; otherwise the answer is no trade.
+
+**The backtest line.** A plan made from a scanner setup shows that setup
+and side's record in the pack's walk-forward backtest
+(`crypto-setup/track_record.json`, or your own run's copy in `crypto/`):
+its average a trade after costs, then its average over the trades that
+passed both checks (the cost rule, and the same setup making money on that
+coin over its last 30 days). "Can't be told from zero" means the range
+around that average, widened for testing 14 setup-and-side groups at once,
+spans zero. It is the setup's history across 40 coins, not a forecast for
+this trade.
+
 **Refused, with the reason:** a stop on the wrong side of the entry, a stop
 tighter than 0.05% of the price, a target on the wrong side, a price already
 past the stop, a short with `allow_short` off, a setup with no stop of its
@@ -100,8 +118,9 @@ own and no other stop named, a squeeze with no side given.
 
 **Warnings** (the plan is still written; say them): a stop inside half a
 15-minute ATR (noise will hit it), a stop wider than three 1-hour ATRs,
-costs over 0.2R at a stop-out, funding of 30% a year or more against the
-side, a price that has moved a quarter of the risk from the trigger, a
+fees and slippage over `max_cost_r` at a stop-out (crypto-risk will block
+it; it names the stop distance that would pass), or over 0.2R when the rule
+is off, funding of 30% a year or more against the side, a price that has moved a quarter of the risk from the trigger, a
 target beyond the 7-day range, a swing level between the entry and the
 target, reward:risk under `min_reward_risk` (crypto-risk will block it), a
 setup that has already failed or run, a market entry more than an hour after
@@ -116,12 +135,17 @@ there is no scan yet or the last scan had no setup on that coin.
    coin, `plan <COIN>` uses it. Without one, ask the user for the side and
    use `--manual`.
 2. Use the setup stop unless the user names another. For a manual plan,
-   `atr:1.5` is the default; offer `swing` when there is a clear swing.
+   `atr:1.5` is the default; offer `swing` when there is a clear swing. On a
+   quiet major a 1.5-ATR stop is often too tight for the cost rule; the
+   warning names the distance that would pass.
 3. Read back: entry and why, stop and its rule, target and its rule, risk a
    coin and as a percent, reward:risk before and after costs, the cost line,
-   funding, the break-even share, the time limit, then every warning.
+   funding, the break-even share, the time limit, the backtest line, then
+   every warning.
 4. If it refuses, say the reason and the fix (a wider stop, a farther
-   target, the other side). Never loosen anything on your own.
+   target, the other side). A stop too tight for the costs: skip it, or a
+   wider stop at a real level, at a smaller size. Never loosen anything on
+   your own.
 5. Say once that the stop is a plan, not a guarantee.
 6. Hand off to `/crypto-timemachine` to replay the plan, then
    `/crypto-budget` to size it.
@@ -144,6 +168,8 @@ Exit plan | ORBX long | Binance ORBXUSDT | 2026-10-21 15:15 UTC
   Funding      +0.0127%/8h (+13.9% a year), longs pay; a full hold crosses 3 payments: -0.02R for this side
   Break-even   the target must come first in 36.4% of trades that hit a side (fees and slippage included)
   Out by       2026-10-22 15:15 UTC (24h), win or lose
+  Backtest     New York opening-range breakout longs: -0.22R a trade after costs over 1,177 trades (Binance, 40 coins, 29 Jul to 27 Oct 2026)
+               with both checks (the cost rule, a positive 30-day record): -0.01R over 158 (can't be told from zero)
   Warning      The target is beyond the 7-day range (19.122 to 21.886).
   Warning      A 1-hour swing high at 21.886 sits between the entry and the target.
 A stop is a plan, not a guarantee: a fast market can fill past it.
@@ -151,8 +177,11 @@ Next: /crypto-timemachine to replay this plan, then /crypto-budget to size it.
 ```
 
 The two warnings say the 2R target asks for a price ORBX has not traded at
-in a week, through a level where it turned before. A 1.5R target, or no
-trade, are both fair answers; the planner does not pick for the user.
+in a week, through a level where it turned before. The backtest line adds
+the long view: New York opening-range longs lost 0.22R a trade over 1,177
+backtested trades, and the ones that passed both checks came out about
+even. A 1.5R target, or no trade, are both fair answers; the planner does
+not pick for the user.
 
 ## Rules
 

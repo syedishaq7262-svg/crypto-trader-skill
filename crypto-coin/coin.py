@@ -193,6 +193,7 @@ def build(venue, text, cfg, with_setups=True, with_news=True):
         if scan is not None:
             x = scan.Ctx(m, t, b5, b1h)
             d["setups"] = scan.setups_for(x, cfg.get("session"))
+            d["session"] = cfg.get("session") or "utc"
     if "news" in got:
         heads, ok, total = got["news"]
         d["news"] = {"count": len(heads), "feeds_ok": ok, "feeds": total,
@@ -247,6 +248,24 @@ def notes_for(d, cfg):
 TREND_WORD = {"up": "up", "down": "down", "mixed": "mixed", None: "-"}
 SETUP_WORDS = {"orb": "opening-range breakout", "breakout": "range breakout", "squeeze": "squeeze", "trend": "trend pullback",
                "reversal": "RSI reversal", "volume": "volume spike", "rs": "relative strength"}
+
+
+def backtest_lines(setups, session):
+    """One line per live setup and side on its record in the published backtest, then where the record is from."""
+    seen, out = set(), []
+    for h in setups:
+        if h["side"] not in cc.SIDES:
+            continue
+        key = (cc.track_key(h["setup"], session), h["side"])
+        if key in seen:
+            continue
+        seen.add(key)
+        w = cc.track_words(h["setup"], h["side"], session)
+        if w:
+            out.append("%s %ss: %s" % (cc.TRACK_WORDS.get(key[0], h["setup"]), h["side"], w))
+    if out:
+        out.append("(the walk-forward backtest: %s)" % cc.track_source())
+    return out
 
 
 def print_card(d):
@@ -365,6 +384,9 @@ def print_card(d):
         cc.out("Setups now " + "; ".join("%s%s (%s)" % (SETUP_WORDS.get(h["setup"], h["setup"]),
                                                           (" " + h["side"]) if h["side"] in cc.SIDES else "", h["status"])
                                          for h in d["setups"]))
+        lines = backtest_lines(d["setups"], d.get("session"))
+        for i, line in enumerate(lines):
+            cc.out(("Backtest   " if i == 0 else "           ") + line)
     else:
         cc.out("Setups now none of the scanner's six single-coin setups")
     for n in d.get("notes") or []:

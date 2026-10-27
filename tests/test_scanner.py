@@ -79,6 +79,28 @@ class PlantedSetups(unittest.TestCase):
             hits = scan.setup_trend(x, scan.args_from({}), ["long"])
             self.assertEqual([h["status"] for h in hits], ["extended"])
 
+    def test_stop_costs_and_the_backtest_notes(self):
+        code, out, err, hits = self.results["binance"]
+        bonk = find(hits, "BONK", "breakout", "short")[0]
+        self.assertTrue(bonk["too_tight"])
+        self.assertGreater(bonk["stop_cost_r"], 0.2)
+        brkx = find(hits, "BRKX", "breakout", "long")[0]
+        self.assertFalse(brkx["too_tight"])
+        self.assertIn("%.2fR over" % bonk["stop_cost_r"], out)
+        self.assertIn("Range breakout | backtest: longs -0.10R, shorts -0.24R a trade after costs", out)
+        self.assertIn("| backtest: longs -0.22R, shorts -0.16R a trade after costs", out)       # the New York range
+        self.assertIn("Squeeze (volatility compression) | backtest of the break: longs +0.01R, shorts -0.17R", out)
+        self.assertIn("Relative strength vs BTC\n", out)                                      # no stop, no backtest
+        self.assertIn("Over 0.2R (max_cost_r) crypto-risk blocks the trade.", out)
+        self.assertIn("walk-forward backtest (Binance, 40 coins, 29 Jul to 27 Oct 2026)", out)
+        for h in hits:
+            if h["side"] in cc.SIDES and h.get("stop_ref") is not None:
+                self.assertIn("stop_cost_r", h, h["coin"])
+        with Session(config={"max_cost_r": 0}) as s:
+            code, out, err = s.run(*SCAN, ["--venue", "binance", "--setups", "breakout", "--now", WED])
+            self.assertNotIn(" over ", out.split("Stop cost")[0])
+            self.assertIn("The cost rule is off (max_cost_r).", out)
+
     def test_relative_strength(self):
         for venue, (_, _, _, hits) in self.results.items():
             rs = [h for h in hits if h["setup"] == "rs"]

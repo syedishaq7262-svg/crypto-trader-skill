@@ -38,7 +38,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 USER_AGENT = "crypto-trader-skill/%s (+https://github.com/crypto-trader-skill)" % VERSION
 
 
@@ -85,7 +85,7 @@ def parse_when(text):
     if re.match(r"^\d{9,13}$", s):
         v = int(s)
         return v if v > 1e11 else v * 1000
-    s = s.replace("T", " ").replace("UTC", "").replace("utc", "").strip()
+    s = s.replace("UTC", "").replace("utc", "").replace("T", " ").strip()     # UTC first: its T is not a separator
     if s.endswith("Z"):
         s = s[:-1].strip()
     offset = None
@@ -336,6 +336,7 @@ DEFAULTS = {
     "max_trades_per_day": 4,
     "max_open_positions": 2,
     "min_reward_risk": 1.5,
+    "max_cost_r": 0.2,               # fees and slippage of a stop-out, in R; past it crypto-risk blocks. 0: off
     "require_stop": True,
     "max_leverage": 3,
     "max_margin_pct": 50,
@@ -1940,9 +1941,23 @@ def cost_rates(venue, cfg=None):
             "slippage_source": "your config" if sb is not None else None}
 
 
+SLIPPAGE_MEMO_S = 300
+
+
 def measure_slippage(venue, symbol, notional=10000.0):
     """Expected cost of crossing the book with a market order: half the spread plus the impact
-    of `notional` USD, as a fraction of the mid. (fraction, words)."""
+    of `notional` USD, as a fraction of the mid. (fraction, words). One venue object reads each
+    book at most once in 5 minutes (the scanner and the Scout's plans share the reading)."""
+    memo = getattr(venue, "__dict__", {}).setdefault("_slippage_memo", {})
+    got = memo.get((symbol, notional))
+    if got and time.time() - got[0] < SLIPPAGE_MEMO_S:
+        return got[1]
+    res = _measure_slippage(venue, symbol, notional)
+    memo[(symbol, notional)] = (time.time(), res)
+    return res
+
+
+def _measure_slippage(venue, symbol, notional):
     try:
         bids, asks = venue.orderbook(symbol, 100 if venue.name != "hyperliquid" else 20)
     except CryptoError:
@@ -2018,6 +2033,112 @@ def breakeven_share(target_r, entry, stop, target, risk, costs):
     if win <= 0:
         return 1.0
     return loss / (win + loss)
+
+
+def stop_cost_r(entry, stop, costs):
+    """What fees and slippage take from a trade that ends at its stop, in R: a market entry and a market exit."""
+    risk = abs(entry - stop)
+    if not risk:
+        return float("inf")
+    return (costs["taker"] + costs["slippage"]) * (entry + stop) / risk
+
+
+def cost_limit(cfg=None):
+    """The cost rule's limit in R (max_cost_r), or None when it is off."""
+    cfg = cfg or load_config()
+    try:
+        v = float(cfg.get("max_cost_r"))
+    except (TypeError, ValueError):
+        return None
+    return v if v > 0 else None
+
+
+def over_cost_limit(cost_r, limit):
+    """Judged as shown, to two decimals: 0.204R prints as 0.20R and is not over a 0.2R limit."""
+    return limit is not None and round(cost_r, 2) > limit + 1e-9
+
+
+# ---------------------------------------------------------------- the backtest's track record
+
+TRACK_FILE = "track_record.json"
+TRACK_WORDS = {"orb-utc": "UTC-day opening-range breakout", "orb-ny": "New York opening-range breakout",
+               "breakout": "range breakout", "squeeze": "squeeze break", "trend": "trend pullback",
+               "reversal": "RSI reversal", "volume": "volume spike"}
+_TRACK = {}
+
+
+def track_record():
+    """The walk-forward backtest's results by setup and side: your own run's crypto/track_record.json when you
+    have put one there, otherwise the copy that ships with the pack (crypto-setup/track_record.json)."""
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), TRACK_FILE)
+    for path in (wpath(TRACK_FILE), here):
+        try:
+            key = (os.path.abspath(path), os.path.getmtime(path))
+        except OSError:
+            continue
+        if key not in _TRACK:
+            try:
+                d = read_json(path, None)
+            except CryptoError:
+                d = None
+            _TRACK[key] = d if (isinstance(d, dict) and d.get("setups")) else None
+        if _TRACK[key]:
+            return _TRACK[key]
+    return None
+
+
+def track_key(setup, session=None):
+    """The backtest's name for a setup: the opening range is tested at the UTC day and New York opens only."""
+    if setup == "orb":
+        return "orb-" + (session or "utc")
+    return setup
+
+
+def track_entry(setup, side, session=None):
+    tr = track_record()
+    if not tr or side not in SIDES:
+        return None
+    return (tr.get("setups") or {}).get("%s|%s" % (track_key(setup, session), side))
+
+
+def track_source(tr=None):
+    """Where the track record comes from, in a few words: "Binance, 40 coins, 29 Jul to 27 Oct 2026"."""
+    tr = tr or track_record()
+    if not tr:
+        return ""
+    a, b = utc_dt(tr["from"]), utc_dt(tr["to"])
+    span = "%d %s to %d %s %d" % (a.day, a.strftime("%b"), b.day, b.strftime("%b"), b.year)
+    return "%s, %d coins, %s" % ((tr.get("venue_label") or tr.get("venue") or "").split(" ")[0], tr.get("coins") or 0, span)
+
+
+def zero_note(e):
+    """' (can't be told from zero)' when the 90% range of an average spans zero."""
+    lo, hi = e.get("lo"), e.get("hi")
+    return " (can't be told from zero)" if (lo is not None and hi is not None and lo < 0 < hi) else ""
+
+
+def track_parts(setup, side, session=None):
+    """('-0.10R a trade after costs over 3,393 trades', '+0.02R over 742 (can't be told from zero)'), the second
+    None when nothing was judged; or None when the backtest has no record of this setup and side."""
+    e = track_entry(setup, side, session)
+    if not e or not e.get("n"):
+        return None
+    raw = "%+.2fR a trade after costs over %s trade%s%s" % (e["avg_r"], "{:,}".format(e["n"]), "" if e["n"] == 1 else "s",
+                                                             zero_note(e))
+    c = e.get("checked")
+    if not c:
+        return raw, None
+    if not c.get("n"):
+        return raw, "none passed"
+    return raw, "%+.2fR over %s%s" % (c["avg_r"], "{:,}".format(c["n"]), zero_note(c))
+
+
+def track_words(setup, side, session=None):
+    """'-0.10R a trade after costs over 3,393 trades; with both checks +0.02R over 742', or None."""
+    parts = track_parts(setup, side, session)
+    if not parts:
+        return None
+    return parts[0] + (("; with both checks " + parts[1]) if parts[1] else "")
 
 
 # Maintenance margin. Bybit and Hyperliquid publish theirs; Binance's brackets need a key,

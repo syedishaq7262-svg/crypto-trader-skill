@@ -52,6 +52,27 @@ class Board(unittest.TestCase):
             self.assertIn("past their 4h00m entry window", out)
             self.assertIn("For a fresh range: scout.py --session ny (the New York open, 1h45m ago).", out)
 
+    def test_stops_too_tight_for_the_costs_are_left_out_and_replaced(self):
+        with Session() as s:
+            code, out, err = s.run(*SCOUT, FAST)
+            self.assertIn("Left out, stops too tight for the costs (fees and slippage over 0.2R at a stop-out, which "
+                          "crypto-risk blocks): BONK short range breakout 0.50R.", out)
+            self.assertIn("Left out: BONK short breakout, a stop-out would cost 0.50R", err)
+            d = cc.read_json(s.path("scout.json"))
+            self.assertEqual(d["skipped"]["stops too tight for the costs"], ["BONK short range breakout 0.50R"])
+            self.assertEqual(d["tested"], 10)                       # the next candidate took its place
+            for x in d["candidates"]:
+                c = x["plan"]["costs"]
+                self.assertLessEqual(round(c["entry_r"] + c["stop_exit_r"], 2), 0.2)
+                self.assertIn("backtest: ", "\n".join(SC.line_for(x["rank"], x)))
+            self.assertIn("     backtest: range breakout shorts -0.24R a trade after costs over 2,557 trades; with both "
+                          "checks +0.06R over 339 (can't be told from zero)", out)
+            self.assertIn("Backtest lines: the walk-forward backtest on Binance, 40 coins, 29 Jul to 27 Oct 2026.", out)
+        with Session(config={"max_cost_r": 0}) as s:                # the rule off: tested, with a note
+            code, out, err = s.run(*SCOUT, FAST)
+            self.assertNotIn("too tight for the costs", out)
+            self.assertIn("costs 0.50R at a stop-out", out)
+
     def test_a_fresh_session_keeps_its_breakouts(self):
         with Session() as s:
             code, out, err = s.run(*SCOUT, FAST + ["--top", "8", "--session", "ny", "--setups", "orb", "--json"])
