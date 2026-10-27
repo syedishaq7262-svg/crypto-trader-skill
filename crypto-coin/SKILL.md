@@ -6,7 +6,9 @@ description: >-
   15m/1h/4h/1d, RSI, volatility, support and resistance, VWAP, liquidity
   (spread, order-book depth, the cost of a $10,000 market order), funding and
   its 30-day rank, open interest, long/short positioning, how it moves
-  against BTC, Fear & Greed, and any scanner setup live on it right now. Use
+  against BTC, Fear & Greed, the latest headlines naming it, the next
+  high-impact US release, exchange delisting notices, and any scanner setup
+  live on it right now. Use
   whenever the user asks about one specific coin: "tell me about SOL", "what
   is BTC doing", "how is PEPE looking", "analyze DOGE", "should I look at
   WIF", "price of ETH", "is SUI liquid enough", "what's the funding on X",
@@ -31,8 +33,8 @@ python3 "${CLAUDE_SKILL_DIR}/coin.py" SOL --venue bybit
 python3 "${CLAUDE_SKILL_DIR}/coin.py" ETH --json
 ```
 
-Flags: `--no-setups`, `--venue`, `--now`, `--offline`, `--record`, `--json`,
-`--no-write`, `--stats`. Any spelling works: `btc`, `BTCUSDT`, `BTC/USDT`,
+Flags: `--no-setups`, `--no-news`, `--venue`, `--now`, `--offline`,
+`--record`, `--json`, `--no-write`, `--stats`. Any spelling works: `btc`, `BTCUSDT`, `BTC/USDT`,
 `BTC-PERP`. An unknown name fails in one line with the closest matches.
 
 ## What it reads and writes
@@ -42,6 +44,7 @@ Flags: `--no-setups`, `--venue`, `--now`, `--offline`, `--record`, `--json`,
 | exchange data | 5m, 1h and 1d candles, the 24h ticker, 30 days of funding, open interest and its history, long/short and taker ratios, the order book, Fear & Greed |
 | `crypto/regime.json` | if crypto-derivs wrote one in the last 6 hours, its label is shown |
 | `crypto-scanner` | if installed next to it, its six single-coin setups run on this coin |
+| `crypto-news` | if installed next to it: headlines naming the coin in the last 24 hours, high-impact US releases in the next 24 hours, Bybit listing and delisting notices |
 | `crypto/coins/<SYMBOL>.json` | everything on the card, for crypto-exit and crypto-scout |
 
 ## The card, line by line
@@ -66,10 +69,15 @@ Flags: `--no-setups`, `--venue`, `--now`, `--offline`, `--record`, `--json`,
 - **Market**: BTC's 24h move, how strongly the coin moves with BTC (beta),
   its 24h move against what BTC implied, Fear & Greed, the regime.
 - **7 days**: an hourly sparkline.
+- **News**: how many headlines named the coin in the last 24 hours, and the
+  latest with its source, age and tags; or that none did, and how many
+  feeds were read.
+- **Macro**: high-impact US releases in the next 24 hours (CPI, jobs, the
+  Fed), which can move every coin at once.
 - **Setups now**: the scanner's single-coin setups that match right now.
 - **Notes**: plain warnings when they apply (new listing, thin volume,
   extreme funding, at the 24h high or low, a wild week, a wide spread,
-  priced per 1,000 coins).
+  priced per 1,000 coins, an exchange delisting or listing it).
 
 ## Steps
 
@@ -83,6 +91,37 @@ Flags: `--no-setups`, `--venue`, `--now`, `--offline`, `--record`, `--json`,
    plan a stop and target, or `/crypto-timemachine` to test it.
 5. If the user asks "should I buy it", answer with what the card shows on
    both sides, then point to the planning chain. Do not give a verdict.
+
+## Example
+
+From the pack's offline test market (synthetic prices, made-up headlines,
+not real data):
+
+```
+SOL | Binance SOLUSDT perpetual | 2026-10-21 15:15 UTC
+Price      171.809   24h -7.44%   7d +7.15%   30d +12.21%
+Range      24h 170.320 to 188.226  |  7d 154.489 to 188.226
+Trend      15m down, 1h mixed, 4h up, 1d -   (price against its 20 and 50 averages)
+Momentum   RSI 1h 39, 4h 56, 1d 55
+Volatility typical hour 1.64% | typical day 7.4% | realized 98% a year this week vs 101% this month
+Levels     resistance 172.246, 174.065  |  support 170.320, 168.265   (1h swing points, 14 days)
+           VWAP since 00:00 UTC 174.353  |  yesterday 172.163 to 188.226  |  20-day average 166.032
+Liquidity  24h $2.30B (1.1x its 7-day average)  |  spread 0.0012%, $6.3M bids and $6.3M asks within 0.25%
+           a $10,000 market buy would fill about 0.0039% above the mid
+Funding    -0.0237%/8h (-26.0% a year), next in 45m  |  30-day average +14% a year
+Open int.  $798.9M, -9.9% in 24h  |  58% of accounts long
+           long unwinding (price down, open interest down)
+Market     BTC 24h -0.8% | moves 1.3x BTC | -6.4% vs what BTC implied | Fear & Greed 64 (Greed) | regime Risk-on
+7 days     ▁▁▁▂▃▄▃▃▂▁▁▁▂▃▃▃▄▃▃▄▄▆▆▆█▄▄▄
+News       2 headlines in 24h; latest: "SOL Climbs as Solana Funds Draw Fresh Inflows" (CoinDesk, 35m ago) [ETF]  /crypto-news has the rest
+Macro      US CPI m/m in 2h45m
+Setups now opening-range breakout long (back inside)
+Note       Funding is in the bottom 5% of the last 30 days: holding a short is unusually expensive.
+Context, not a call. Next: /crypto-exit SOL to plan a stop and target.
+```
+
+The 1d trend shows `-` because the test market keeps only 35 days, too few
+for a 50-day average; real exchanges have years of daily candles.
 
 ## Rules
 

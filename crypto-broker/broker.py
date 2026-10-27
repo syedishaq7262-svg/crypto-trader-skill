@@ -228,8 +228,12 @@ def place(a, cfg):
     if sg * (t["last"] - o["stop"]) <= 0:
         raise cc.CryptoError("not placed: the price is past the stop")
     book = load_book()
-    if any(p["symbol"] == o["symbol"] for p in book["positions"] + book["pending"]):
-        raise cc.CryptoError("not placed: a %s position or order is already open" % o["symbol"])
+    coin = o.get("coin") or cc.clean_coin(o["symbol"])
+    held = [p for p in book["positions"] + book["pending"]
+            if (p.get("coin") or (p.get("order") or {}).get("coin") or cc.clean_coin(p.get("symbol") or "")) == coin]
+    if held:
+        raise cc.CryptoError("not placed: a %s position or order is already open%s" % (
+            coin, (" on %s" % held[0].get("venue", "").capitalize()) if held[0].get("venue") not in (None, o["venue"]) else ""))
     now = cc.now_ms()
     if live:
         try:
@@ -512,8 +516,9 @@ def paper_sync(book, cfg, report):
             continue
         price, reason, at, fee_out = res
         ev = close_record(p, price, fee_out, at, reason)
-        report.append("%s %s closed at %s by the %s: %s (%+.2fR)." % (p["coin"], p["side"], cc.fmt_price(price, p.get("tick")),
-                                                                      reason, cc.fmt_money(ev["pnl_usd"]), ev["r"]))
+        report.append("%s %s closed at %s by the %s, %s: %s (%+.2fR)." % (
+            p["coin"], p["side"], cc.fmt_price(price, p.get("tick")), reason, cc.fmt_local(at),
+            ("+" if ev["pnl_usd"] > 0 else "") + cc.fmt_money(ev["pnl_usd"]), ev["r"]))
     book["positions"] = keep
 
 
@@ -749,7 +754,8 @@ def move_stop(a, cfg):
     m = v.market(p["symbol"])
     if m.get("tick"):
         new = cc.round_to_tick(new, m["tick"])
-    mark = v.ticker(p["symbol"])["mark"]
+    t = v.ticker(p["symbol"])
+    mark = t.get("mark") or t["last"]
     if sg * (mark - new) <= 0:
         raise cc.CryptoError("the price %s is already past %s; that stop would fire at once" % (
             cc.fmt_price(mark, p.get("tick")), cc.fmt_price(new, p.get("tick"))))

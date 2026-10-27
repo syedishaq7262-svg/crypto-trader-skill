@@ -129,10 +129,10 @@ class OtherSetups(unittest.TestCase):
     def test_a_coiled_squeeze_plan_says_the_history_needs_the_break(self):
         with Session() as s:
             s.run(*SCAN, ["--venue", "binance", "--setups", "squeeze"])
-            s.run(*EXIT, ["plan", "SQZX", "--side", "long"])
+            s.run(*EXIT, ["plan", "FUNDX", "--side", "long"])
             code, out, err = s.run(*TM, ["run", "--replays", "500"])
             self.assertIn("enters before the squeeze breaks", out)
-            self.assertIn("/crypto-entry SQZX --setup squeeze", out)
+            self.assertIn("/crypto-entry FUNDX --setup squeeze", out)
 
     def test_no_squeeze_and_no_trend_say_so(self):
         with Session() as s:

@@ -7,10 +7,10 @@ description: >-
   in the last 15 minutes AND the user typed an explicit yes for it in the
   chat. Paper by default: fills at live prices against the real order book
   and plays stops, targets, time limits, funding and liquidation forward on
-  real 1-minute candles (no testnet). Live on Binance USD-M and Bybit with
-  the user's own keys from environment variables: isolated margin, one-way
-  mode, the stop on the exchange (mark price, reduce-only) the moment the
-  entry fills, and the position closed at once if the stop cannot go on.
+  real 1-minute candles. Live on Binance USD-M and Bybit with the user's own
+  keys from environment variables: isolated margin, the stop on the
+  exchange the moment the entry fills, and the position closed at once if
+  the stop cannot go on.
   Also syncs, lists positions, closes, tightens stops and shows the account.
   Use when the user says "place it", "buy it", "short it", "go", "yes" to a
   ticket, "take the trade", "close my SOL", "move my stop", "what is open",
@@ -132,7 +132,9 @@ never in a file in this folder. The broker never prints them.
 
 ## Example
 
-From the pack's offline test market (synthetic prices, not real data), paper:
+From the pack's offline test market (synthetic prices, not real data), on
+paper: a SOL long planned by hand (`exit.py plan SOL --side long --manual
+--stop atr:1.5 --hold 8h`), sized and passed by the risk check.
 
 ```
 Ticket #1 | PAPER | Binance SOLUSDT
@@ -140,20 +142,25 @@ Ticket #1 | PAPER | Binance SOLUSDT
   Stop-loss 169.800: a stop-market, reduce-only, triggered by the mark price. Lose about $10.00 there.
   Take-profit 175.827: a reduce-only limit. Make about $17.70 there.
   Out by 2026-10-21 23:15 UTC, win or lose. Estimated liquidation 88.152 (48.7% away).
+  ! not replayed: /crypto-timemachine has not run on this plan
 READY. Fingerprint 1d24d046101b0622. The risk check is good until 15:30 UTC.
+To place it: python3 broker.py place --yes 1d24d046101b0622
+Claude runs that only after you type yes for this exact order.
 ```
 
 After the user typed yes:
 
 ```
 Placed (paper): long 4.551 SOL filled at 171.810. Stop 169.800, target 175.827, 2x isolated, out by 2026-10-21 23:15 UTC.
+Position p1792595700000-SOLUSDT. /crypto-alerts can watch it; broker.py sync plays it forward.
 ```
 
-A sync four hours later:
+A sync after the time limit plays the minutes in between and finds the
+target came first:
 
 ```
-SOL long closed at 175.827 by the target: $17.88 (+1.95R).
-Synced 2026-10-21 19:00 UTC: 0 open, 0 waiting to fill.
+SOL long closed at 175.827 by the target, 2026-10-21 17:47 UTC: +$17.88 (+1.95R).
+Synced 2026-10-21 23:30 UTC: 0 open, 0 waiting to fill.
 ```
 
 ## Rules

@@ -84,7 +84,9 @@ def candidates_of(watch, a):
     hits = watch.get("hits") or []
     want = set(cc.clean_coin(s) for s in (a.symbols or "").split(",") if s.strip())
     setups = set((a.setups or ",".join(TESTABLE + ("rs",))).split(","))
-    out, skipped = [], {"no side yet": [], "failed or ran": []}
+    out, skipped = [], {"no side yet": [], "failed or ran": [], "past the entry window": []}
+    window_ms = float((watch.get("params") or {}).get("entry_hours") or 4) * cc.HOUR_MS
+    now = cc.now_ms()
     seen = set()
     broke = set(h["coin"] for h in hits if h["setup"] == "squeeze" and h["side"] in cc.SIDES)
     for h in hits:
@@ -101,12 +103,15 @@ def candidates_of(watch, a):
         if h.get("status") in ("back inside", "extended"):
             skipped["failed or ran"].append("%s %s %s" % (h["coin"], h["side"], h["setup"]))
             continue
+        opened = (h.get("metrics") or {}).get("session_open")
+        if h["setup"] == "orb" and opened and now > opened + window_ms:
+            skipped["past the entry window"].append("%s %s" % (h["coin"], h["side"]))   # its record is of on-time entries
+            continue
         key = (h["coin"], h["setup"], h["side"])
         if key in seen:
             continue
         seen.add(key)
         out.append(h)
-    now = cc.now_ms()
     out.sort(key=lambda h: (h["setup"] not in TESTABLE, STATUS_RANK.get(h.get("status"), 3),
                             (now - (h.get("at") or now)) // (15 * 60000), -(h.get("rvol") or 0), -(h.get("volume_24h") or 0)))
     return out, skipped
@@ -272,6 +277,9 @@ def board(a, cfg):
     regime = get_regime(venue, cfg, a)
     cands, skipped = candidates_of(watch, a)
     params = watch.get("params") or {"session": watch.get("session"), "or_minutes": watch.get("or_minutes")}
+    fresher = None
+    if skipped["past the entry window"]:
+        fresher = scan.fresher_session(params.get("session") or "utc", int(params.get("or_minutes") or 30), cc.now_ms())
     testable = [h for h in cands if h["setup"] in TESTABLE][:a.top]
     untested = [h for h in cands if h["setup"] not in TESTABLE][:max(0, a.top - len(testable))]
     todo = testable + untested
@@ -299,6 +307,8 @@ def board(a, cfg):
             "regime": regime.get("label") if regime else None, "regime_read": regime.get("read") if regime else None,
             "watchlist_as_of": watch.get("as_of"), "watchlist_reused": reused, "live_setups": len(watch.get("hits") or []),
             "tested": len(results), "skipped": skipped, "failures": failures, "candidates": results,
+            "entry_window_ms": float((watch.get("params") or {}).get("entry_hours") or 4) * cc.HOUR_MS,
+            "fresher_session": list(fresher) if fresher else None,
             "params": {"top": a.top, "replays": a.replays, "seed": a.seed}}
     if not a.no_write:
         cc.write_json(cc.wpath("scout.json"), data)
@@ -324,6 +334,16 @@ def print_board(d):
     cc.out(line)
     if sk.get("failed or ran"):
         cc.out("Left out, already failed or run: %s." % ", ".join(sk["failed or ran"][:8]))
+    if sk.get("past the entry window"):
+        n = len(sk["past the entry window"])
+        line = "Left out, opening-range breakouts past their %s entry window (%s%s): a late entry is a different trade." % (
+            cc.fmt_dur(d.get("entry_window_ms") or 4 * cc.HOUR_MS), ", ".join(sk["past the entry window"][:6]),
+            " and %d more" % (n - 6) if n > 6 else "")
+        fr = d.get("fresher_session")
+        if fr:
+            line += " For a fresh range: scout.py --session %s (the %s open, %s ago)." % (
+                fr[0], cc.SESSION_NAMES.get(fr[0], fr[0]), cc.fmt_dur(d["as_of"] - fr[1]))
+        cc.out(line)
     by = {}
     for c in d["candidates"]:
         by.setdefault(c["tier"], []).append(c)

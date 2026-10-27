@@ -43,6 +43,43 @@ class Repo(unittest.TestCase):
             self.assertGreater(len(fm), 300, "%s description is too thin" % s)
             self.assertIn("${CLAUDE_SKILL_DIR}", text, s)
 
+    def test_names_and_descriptions_fit_the_skill_limits(self):
+        for s in SKILLS:
+            fm, _ = frontmatter(os.path.join(ROOT, s, "SKILL.md"))
+            name = re.search(r"^name: (.*)$", fm, re.M).group(1)
+            self.assertRegex(name, r"^[a-z0-9-]{1,64}$", s)
+            m = re.search(r"description: >-\n((?:  .*\n?)+)", fm + "\n")
+            desc = " ".join(l.strip() for l in m.group(1).splitlines())
+            self.assertLessEqual(len(desc), 1024, "%s description is %d characters; the limit is 1024" % (s, len(desc)))
+            self.assertNotIn("<", desc, s)
+            self.assertNotIn(">", desc, s)
+
+    def test_plugin_manifests(self):
+        with open(os.path.join(ROOT, ".claude-plugin", "plugin.json")) as fh:
+            plugin = json.load(fh)
+        with open(os.path.join(ROOT, ".claude-plugin", "marketplace.json")) as fh:
+            market = json.load(fh)
+        self.assertEqual(plugin["name"], "crypto-trader-skill")
+        self.assertRegex(plugin["version"], r"^\d+\.\d+\.\d+$")
+        self.assertEqual(plugin["skills"], "./")
+        self.assertEqual(plugin["license"], "MIT")
+        self.assertEqual([p["name"] for p in market["plugins"]], [plugin["name"]])
+        self.assertEqual(market["plugins"][0]["source"], "./")
+        for url in (plugin["homepage"], plugin["repository"], market["plugins"][0]["homepage"]):
+            self.assertEqual(url, "https://github.com/syedishaq7262-svg/crypto-trader-skill")
+        with open(os.path.join(ROOT, "LICENSE")) as fh:
+            self.assertTrue(fh.read().startswith("MIT License"))
+
+    def test_the_readme_names_every_skill(self):
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as fh:
+            readme = fh.read()
+        words = {16: "sixteen"}
+        self.assertIn("%d Claude skills" % len(SKILLS), readme)
+        self.assertIn("## The %s" % words.get(len(SKILLS), str(len(SKILLS))), readme)
+        for s in SKILLS:
+            self.assertIn("| `/%s` |" % s, readme, s)
+            self.assertRegex(readme, r"\n%s/ +SKILL\.md" % re.escape(s), s)
+
     def test_order_path_skills_carry_the_safety_block(self):
         for s in SKILLS:
             if s in NOT_ON_THE_ORDER_PATH:
@@ -62,7 +99,7 @@ class Repo(unittest.TestCase):
                     self.assertIn("import cryptocore as cc", src, "%s/%s" % (s, f))
 
     def test_python_3_8_syntax_and_modules(self):
-        for s in SKILLS:
+        for s in SKILLS + ["tools"]:
             folder = os.path.join(ROOT, s)
             for f in os.listdir(folder):
                 if not f.endswith(".py"):
@@ -78,9 +115,9 @@ class Repo(unittest.TestCase):
         import sys
         allowed = set(getattr(sys, "stdlib_module_names", ())) | set((
             "argparse ast base64 bisect collections concurrent contextlib datetime email gzip hashlib hmac html importlib io json "
-            "math os platform random re shutil socket ssl statistics sys tempfile threading time urllib uuid xml zipfile").split())
+            "math os platform random re shutil socket ssl statistics sys tempfile threading time traceback urllib uuid xml zipfile").split())
         allowed.add("cryptocore")
-        for s in SKILLS:
+        for s in SKILLS + ["tools"]:
             folder = os.path.join(ROOT, s)
             for f in os.listdir(folder):
                 if not f.endswith(".py"):

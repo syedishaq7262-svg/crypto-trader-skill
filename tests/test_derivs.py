@@ -88,6 +88,9 @@ class Regime(unittest.TestCase):
             r = cc.read_json(s.path("regime.json"))
             self.assertIn(r["label"], ("Risk-on", "Risk-off", "Mixed", "Overheated", "Fearful"))
             self.assertEqual(r["fng"], 64)
+            self.assertIsNone(r["btc_ema50"])                  # the test market has 35 days, too few for a 50-day average,
+            self.assertEqual(r["trend"], 1)                    # so the rising 20-day average decides the trend
+            self.assertIn("uptrend (above a rising 20-day average)", out)
             self.assertIsNotNone(r["breadth"])
             self.assertIn("not a forecast", out)
 

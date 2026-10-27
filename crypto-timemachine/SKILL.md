@@ -142,22 +142,32 @@ From the pack's offline test market (synthetic prices, not real data): the
 ORBX opening-range plan from crypto-exit.
 
 ```
-10,000 replays of the next 24h in blocks of about 1h00m, seed 19:
-  target first   31.6%   median 6h30m in
-  stop first     68.0%   median 2h50m in
-  still open      0.4%   out at the time limit, price median 17.731 (5% to 95%: 17.476 to 17.931)
-  green          31.8%   ended above zero after costs
-  Average R after costs -0.17 (median -1.13; 90% of replays between -1.15 and +1.91).
-  Costs: 0.06R in; out 0.01R at the target, 0.06R at a stop; funding averaged -0.02R.
-Close to break-even: to break even after costs the target must come first in 36.6% of the replays that hit a side; it did in 31.7%.
+Time Machine | ORBX long | Binance ORBXUSDT | plan made 2026-10-21 15:15 UTC
+Plan: entry 21.456, stop 21.128 (-1R), target 22.112 (+2R), out by 2026-10-22 15:15 UTC (288 five-minute bars).
+Pool: 8,352 five-minute bars, 2026-09-21 to 2026-10-21. Today is 0.65x as volatile as the pool's typical day; replays are scaled to today. Drift removed (+1.15% a day in the pool).
 
-History: the same opening-range (New York open) rule on the pool fired 8 times; 8 became trades, one at a time.
-  0 target, 7 stop, 1 out at the time limit. Average R after costs -1.11 (90% range -1.22 to -0.92).
-  Target first in 0 of 7 decided: 0% (95% range 0% to 35%); break-even needs 36.6%.
-Edge test: 800 random entries at the same times of day, same stop distance and target, averaged -0.52R.
-  The setup did worse than random entries: edge -0.58R a trade (90% range -0.70 to -0.40).
-Verdict: no edge so far. The target came first in 0 of 7 decided past trades; even the top of the 95% range (35%) is under the 36.6% break-even.
+10,000 replays of the next 24h in blocks of about 1h00m, seed 19:
+  target first   29.1%   median 11h25m in
+  stop first     61.0%   median 6h25m in
+  still open      9.9%   out at the time limit, price median 21.627 (5% to 95%: 21.280 to 21.987)
+  green          36.0%   ended above zero after costs
+  Average R after costs -0.09 (median -1.11; 90% of replays between -1.13 and +1.93).
+  Costs: 0.05R in; out 0.01R at the target, 0.05R at a stop; funding averaged -0.01R.
+Close to break-even: to break even after costs the target must come first in 36.4% of the replays that hit a side; it did in 32.3%.
+
+History: the same opening-range (New York open) rule on the pool fired 11 times; 11 became trades, one at a time.
+  1 target, 10 stop, 0 out at the time limit. Average R after costs -0.89 (90% range -1.19 to -0.32).
+  Target first in 1 of 11 decided: 9% (95% range 2% to 38%); break-even needs 36.4%.
+Edge test: 1,100 random entries at the same times of day, same stop distance and target, averaged -0.23R.
+  The setup did worse than random entries: edge -0.66R a trade (90% range -0.96 to -0.10).
+Verdict: no edge. The setup lost 0.89R a trade after costs over its last 11 trades here (random entries: -0.23R).
+Built from the last 30 days of this coin's own candles. A simulation, not a prediction.
 ```
+
+The replays alone say "close to break-even". The history settles it: the
+same rule on ORBX's last 30 days hit its target once in 11 trades and did
+worse than random entries at the same hours. That is a reason not to take
+the trade, and the verdict says so.
 
 ## Rules
 

@@ -96,17 +96,25 @@ From the pack's offline test market (synthetic prices, not real data):
 
 ```
 Liquidation | SOL long at 10x isolated | Bybit SOLUSDT | 2026-10-21 15:15 UTC
-Entry 133.198 (now). Estimated liquidation 120.547: 9.50% below.
+Entry 171.809 (now). Estimated liquidation 155.491: 9.50% below.
 Maintenance margin 0.50% (Bybit risk tiers). The exchange's own liquidation price is the one that counts.
-Last 35 days, within 24h of any hourly close: a 9.5% move against a long happened 7.4% of the time. The worst was 17.3%.
+Last 42 days, within 24h of any hourly close: a 9.5% move against a long happened 5.8% of the time. The worst was 16.3%.
 
 leverage  liquidation   away  how often a move that big came within 24h
-      2x       66.971  49.7%                                      never
-      3x       89.294  33.0%                                      never
-      5x      107.153  19.6%                                      never
-     10x      120.547   9.5%                                       7.4%
-     20x      127.245   4.5%                                        34%
+      2x       86.384  49.7%                                      never
+      3x      115.178  33.0%                                      never
+      5x      138.214  19.6%                                      never
+     10x      155.491   9.5%                                       5.8%
+     20x      164.129   4.5%                                        32%
+     25x      165.857   3.5%                                        41%
+     50x      169.312   1.5%                                        71%
+
+Isolated margin: a liquidation costs this position's margin, not the rest of the account.
 ```
+
+At 10x, a move big enough to liquidate this long came within a day 5.8% of
+the time over the last 42 days; at 20x, about one day in three. The
+pack's own cap is 3x unless the user raises it.
 
 ## Rules
 

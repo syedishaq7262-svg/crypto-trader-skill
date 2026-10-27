@@ -80,7 +80,8 @@ Each one uses closed candles only, never the bar still forming.
    squeeze` waits for the break). The break itself is a hit with a side: the
    first 1-hour close outside the bands after a squeeze in the 12 hours
    before, `broke up` or `broke down`, with the middle band as its stop
-   reference.
+   reference. A coin that just broke out is listed by its break, not as
+   coiled.
 4. **trend** 1-hour 20, 50 and 200 averages stacked in one direction and the
    price on the right side of the 50; a 15-minute pullback of at least 0.5%
    touched the 15-minute 20 average and the last bar closed back over it.
@@ -109,6 +110,51 @@ crypto-exit, not a stop order.
 5. Offer the next step: `/crypto-coin <coin>` for the full picture of one
    hit, `/crypto-scout` to rank the hits by how each setup has tested on
    that coin's own history, or `/crypto-exit` to plan a stop and target.
+
+## Example
+
+From the pack's offline test market (synthetic prices, not real data), the
+New York open, shortened:
+
+```
+Scan | Binance USD-M futures | 2026-10-21 15:15 UTC
+26 coins scanned (left out: 1 stablecoin, 1 listed recently, 1 low volume). Closed bars only; the newest 5m bar closed at 15:15 UTC.
+
+Opening-range breakout | New York open at 13:30 UTC | 30-minute range
+coin  side   range                   trigger (5m close)       now  rvol  status
+APT   short  12.378 to 12.564        12.342 @ 14:50 UTC    12.261  4.9x  holding
+ORBX  long   21.002 to 21.255        21.404 @ 14:20 UTC    21.456  4.8x  holding
+ADA   short  0.46017 to 0.46335     0.45902 @ 14:05 UTC   0.45662  4.6x  holding
+  ... 4 more in crypto/watchlist.json
+  Broke out, then fell back inside: INJ long, OP short, ARB short, APT long, SQZX short
+
+Range breakout
+coin  side     level  15m close  beyond  rvol  status
+BRKX  long    2.9210     2.9623  +1.41%  3.5x  fresh
+BRKD  short   13.052     12.871  +1.39%  3.5x  fresh
+
+Squeeze (volatility compression)
+coin   band width  rank (30d)  lower band  upper band
+FUNDX       1.66%          0%      30.044      30.547
+  Broke out of a squeeze (first 1h close outside the bands):
+coin   side               1h close      band  middle band
+ETH    short  3,444.24 @ 15:00 UTC  3,444.42     3,476.50
+
+Volume spike
+coin  side  15m close    move  rvol     size
+VOLX  long    0.68892  +2.62%  8.7x  3.3 ATR
+
+Relative strength vs BTC
+coin  role        24h  BTC 24h  beta  vs expected
+SOL   laggard  -7.54%   -0.85%  1.25       -6.48%
+LINK  leader   +7.76%   -0.85%  1.07       +8.66%
+
+44 hits across 25 coins. A scan lists charts that match a rule; it is not a list of coins to buy.
+Next: /crypto-coin <coin> for the full picture, /crypto-exit to set the stop and target.
+```
+
+APT shows twice: its long breakout fell back inside the range, and its short
+breakout is holding. Both happened, so both are listed.
 
 ## Rules
 

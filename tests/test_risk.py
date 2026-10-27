@@ -133,6 +133,27 @@ class Gate(unittest.TestCase):
             code, out, err, r = check(s)
             self.assertBlocked(r, "duplicate")
             self.assertBlocked(r, "positions")
+        with Session(config={"max_open_positions": 3}) as s:                   # the same coin on another exchange
+            ready(s)
+            cc.write_json(s.path("positions.json"), {"positions": [{"symbol": "SOL", "coin": "SOL", "venue": "hyperliquid",
+                                                                     "margin": 100, "loss_at_stop_usd": 5}]})
+            code, out, err, r = check(s)
+            self.assertBlocked(r, "duplicate")
+            self.assertTrue(any("on Hyperliquid" in x and "even on another exchange" in x for x in r["reasons"]), r)
+
+    def test_a_resting_limit_counts_as_a_position(self):
+        with Session(config={"max_open_positions": 1}) as s:
+            ready(s)
+            cc.write_json(s.path("positions.json"), {"positions": [], "pending": [
+                {"order": {"symbol": "BTCUSDT", "coin": "BTC", "venue": "binance", "margin": 50, "loss_at_stop_usd": 8}}]})
+            code, out, err, r = check(s)
+            self.assertBlocked(r, "positions")
+
+    def test_a_torn_log_line_is_skipped(self):
+        with Session() as s:
+            with open(s.path("ledger.jsonl"), "w") as fh:
+                fh.write('{"type": "close", "at": 1, "pnl_usd": -1}\n{"type": "clo')
+            self.assertEqual(len(cc.read_jsonl(s.path("ledger.jsonl"))), 1)
 
     def test_liquidation_buffer(self):
         with Session(config={"max_leverage": 50, "min_liq_buffer": 2.0, "max_margin_pct": 100}) as s:

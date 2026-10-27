@@ -95,6 +95,48 @@ change is still exact.
    trade on a coin with hot funding, say what holding costs per day at their
    size, from the yearly rate.
 
+## Example
+
+From the pack's offline test market (synthetic prices and positioning, not
+real data). The radar:
+
+```
+Derivatives radar | Binance USD-M futures | 2026-10-21 15:15 UTC | 26 coins
+Market: median funding +4% a year (normal); open interest +0.3% in 24h across the 10 busiest coins.
+
+Crowded trades
+  FUNDX    crowded longs            funding +104% a year, open interest +27.4% in 24h, 74% of accounts long, price -0.4%
+           Longs pay to hold while price goes nowhere. A drop can cascade through their stops (squeeze-down risk).
+  SHRTX    crowded shorts           funding -68% a year, open interest +30.1% in 24h, 36% of accounts long, price +2.5%
+           Shorts pay to hold while open interest grows. A push up can force them to buy (short-squeeze fuel).
+
+Price against open interest, 24h
+  new longs                 (price up, open interest up): LINK +7.2%/+6.9%, INJ +4.5%/+5.1%
+  new shorts                (price down, open interest up): NEAR -2.2%/+14.1%
+  long unwinding            (price down, open interest down): SOL -7.4%/-9.9%, RSIX -3.5%/-5.6%
+
+Funding, a year: highest  FUNDX +104%  LINK +39%  ARB +34%  INJ +27%  WIF +24%
+                 lowest   SHRTX -68%  BONK -29%  SOL -26%  RSIX -9%  TIA -9%
+
+Same coin, different venues (next funding, a year)
+  FUNDX    Binance +109% | Bybit +99% | Hyperliquid +26%   spread 83 points
+
+Positioning is context, not a signal. Crowded trades can stay crowded for days.
+```
+
+One coin, `coin SOL`:
+
+```
+SOL derivatives | Binance USD-M futures SOLUSDT | 2026-10-21 15:15 UTC
+Funding    -0.0237%/8h (-26.0% a year) now. Next payment in 45m (16:00 UTC).
+           30 days: average +14% a year; today is in the bottom 2% of 90 payments; 7-day average +17%; negative 19 times.
+Open interest  $798.9M, -9.9% in 24h, -2.9% in 7 days. Last 48h: ▁▂▄▄▅▆▅▅▅▆█▇▆▄▃▂▂▂▂▂▂▃▂▁
+Positioning  58% of accounts long (a day ago 58%); top traders 58% long; taker buy/sell 1.13.
+Basis  mark 171.809 vs index 171.774 (+0.020%).
+Across venues (next funding, a year): Binance -27%, Bybit -25%, Hyperliquid -26%.
+Read: long unwinding (price down, open interest down).
+```
+
 ## Rules
 
 - Every number comes from the tool; repeat the reads, do not embellish them.

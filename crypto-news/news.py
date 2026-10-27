@@ -373,6 +373,44 @@ def notices(known):
     return data, note
 
 
+def feeds_from(cfg):
+    """(name, url) for each feed: the config's news_feeds (URLs or [name, url] pairs), else the built-in outlets."""
+    feeds = cfg.get("news_feeds") or FEEDS
+    return [(f[0], f[1]) if isinstance(f, (list, tuple)) else (re.sub(r"^https?://(www\.)?", "", f).split("/")[0], f)
+            for f in feeds]
+
+
+def coin_headlines(coin, known, cfg, hours=24.0):
+    """Headlines naming one coin in the last `hours`, each story once, newest first; and how many feeds answered.
+    crypto-coin puts these on its card."""
+    items, sources = read_feeds(feeds_from(cfg))
+    now = cc.now_ms()
+    mine = []
+    for it in items:
+        if not it["at"] or not (now - int(hours * HOUR) <= it["at"] <= now + 10 * MIN):
+            continue
+        it["coins"] = coins_in(it["title"] + " " + it["summary"][:200], known)
+        if coin in it["coins"]:
+            it["tags"] = tags_of(it["title"] + " " + it["summary"])
+            it["important"] = bool(set(it["tags"]) & set(IMPORTANT)) or "regulatory" in it["tags"]
+            mine.append(it)
+    heads = [it for it in cluster(mine) if not it.get("dupe_of")]
+    heads.sort(key=lambda it: -it["at"])
+    return heads, sum(1 for s in sources if s["ok"]), len(sources)
+
+
+def macro_soon(hours=24.0, countries=("USD",)):
+    """High-impact releases from 2 hours ago to `hours` ahead, oldest first ([] when the calendar cannot be read)."""
+    try:
+        events, _ = macro_calendar()
+    except cc.CryptoError:
+        return None
+    now = cc.now_ms()
+    rows = [e for e in events if e["impact"] == "High" and e["country"] in countries
+            and now - 2 * HOUR <= e["at"] <= now + int(hours * HOUR)]
+    return sorted(rows, key=lambda e: e["at"])
+
+
 # ---------------------------------------------------------------- coins and moves
 
 def watched(a):
@@ -453,10 +491,7 @@ def collect(a, cfg):
     watch = watched(a)
     for w in watch:
         known.add(w["coin"])
-    feeds = cfg.get("news_feeds") or FEEDS
-    feeds = [(f[0], f[1]) if isinstance(f, (list, tuple)) else (re.sub(r"^https?://(www\.)?", "", f).split("/")[0], f)
-             for f in feeds]
-    items, sources = read_feeds(feeds)
+    items, sources = read_feeds(feeds_from(cfg))
     window = now - int(a.hours * HOUR)
     undated = sum(1 for it in items if not it["at"])
     items = [it for it in items if it["at"] and window <= it["at"] <= now + 10 * MIN]
@@ -671,11 +706,12 @@ def main(argv=None):
             cc.dump({"as_of": now, "events": rows, "note": note})
             return 0
         cc.out("Macro calendar | %s | %s, %s impact | the feed covers this week" % (cc.fmt_local(now), a.countries.upper(), a.impact))
-        for e in rows:
-            when = ("released %s" % ago(e["at"], now)) if e["at"] <= now else ago(e["at"], now)
-            cc.out("  %-16s %s  %s %s  %s" % (when, cc.fmt_local(e["at"]), e["country"], e["title"],
-                                           " ".join(x for x in ("forecast " + e["forecast"] if e["forecast"] else "",
-                                                                "previous " + e["previous"] if e["previous"] else "") if x)))
+        whens = [("released %s" % ago(e["at"], now)) if e["at"] <= now else ago(e["at"], now) for e in rows]
+        wide = max([len(w) for w in whens] or [0])
+        for e, when in zip(rows, whens):
+            extra = ", ".join(x for x in ("forecast " + e["forecast"] if e["forecast"] else "",
+                                          "previous " + e["previous"] if e["previous"] else "") if x)
+            cc.out(("  %-*s  %s  %s %s  %s" % (wide, when, cc.fmt_local(e["at"]), e["country"], e["title"], extra)).rstrip())
         if not rows:
             cc.out("  nothing at that impact in the window")
         if note:

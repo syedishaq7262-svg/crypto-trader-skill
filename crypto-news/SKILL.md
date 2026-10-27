@@ -97,8 +97,9 @@ During a session: `/loop 15m /crypto-news` shows only what is new each time.
 
 ## Example
 
-From the pack's offline test feeds, shortened: made-up headlines in the outlets' real
-feed formats, synthetic prices. None of it is real news.
+From the pack's offline test feeds: made-up headlines in the outlets' real
+feed formats, a made-up calendar, synthetic prices. None of it is real news.
+`news.py --coins SOL,THINX,WIF` while a SOL long plan is open:
 
 ```
 News | 2026-10-21 15:15 UTC | the last 24h
@@ -116,6 +117,7 @@ Exchange notices (Bybit):
 Your coins:
   SOL (asked)  -7.5% 24h, -2.4% 1h  MOVING: the last hour moved 4.5x its usual hour
     35m ago   SOL Climbs as Solana Funds Draw Fresh Inflows [ETF]  (CoinDesk)
+    1h10m ago SOL Price Prediction: Could Solana Hit $300 This Month? [opinion]  (BeInCrypto)
   THINX (asked)  +2.1% 24h, -0.2% 1h
     no new headline in the last 24h
     ! an exchange is delisting it: positions get closed at the delisting time.
@@ -124,10 +126,25 @@ Your coins:
 
 Market:
   ! 1h00m ago Hackers Drain $40 Million From Lending Protocol on Arbitrum [hack] ARB  (Cointelegraph)
+    50m ago   Dogecoin Whales Move $200 Million to Exchanges [whale] DOGE  (Decrypt)
+    1h15m ago THE NEW ERA FOR CRYPTO IS HERE AND ONE BIG TOP IS IN  (BeInCrypto)
+    1h30m ago Strategy Buys Another 5,000 BTC [treasury] BTC  (Bitcoin Magazine)
     2h10m ago Bitcoin Dips as Traders Brace for Fed Rate Decision [macro] BTC  (Cointelegraph +1 more)
+    3h00m ago BRKX Breaks Out as Exchange Lists New Perpetual [listing] BRKX  (Cointelegraph)
+    4h00m ago SEC Sues Crypto Lender Over Unregistered Securities [regulatory]  (Decrypt)
 
 Read 5 of 7 feeds (The Block: www.theblock.co answered HTTP 403; CryptoSlate: the feed has a DOCTYPE, so it was not read (a safety rule)). 9 new items.
 Headlines are leads, not facts: open the story before acting on one.
+```
+
+`news.py macro`:
+
+```
+Macro calendar | 2026-10-21 15:15 UTC | USD, high impact | the feed covers this week
+  released 3h00m ago  2026-10-21 12:15 UTC  USD Core PCE Price Index m/m  forecast 0.2%, previous 0.3%
+  in 2h45m            2026-10-21 18:00 UTC  USD CPI m/m  forecast 0.3%, previous 0.4%
+  in 1d 3h            2026-10-22 18:15 UTC  USD FOMC Statement
+Unofficial feed: check the time on the agency's own calendar before trading around it.
 ```
 
 ## Rules

@@ -135,6 +135,51 @@ def fmt_utc(ms, date=True, seconds=False):
     return utc_dt(ms).strftime(f) + " UTC"
 
 
+# Standard offset (minutes) and daylight rule for common zones, used when Python has no time zone
+# database (3.8, or Windows without the tzdata package). "us", "eu", "au", "nz" are the rules below.
+FALLBACK_TZ = {
+    "Australia/Melbourne": (600, "au"), "Australia/Sydney": (600, "au"), "Australia/Canberra": (600, "au"),
+    "Australia/Hobart": (600, "au"), "Australia/Adelaide": (570, "au"), "Australia/Brisbane": (600, None),
+    "Australia/Darwin": (570, None), "Australia/Perth": (480, None), "Pacific/Auckland": (720, "nz"),
+    "Asia/Kolkata": (330, None), "Asia/Calcutta": (330, None), "Asia/Karachi": (300, None), "Asia/Dhaka": (360, None),
+    "Asia/Dubai": (240, None), "Asia/Riyadh": (180, None), "Asia/Singapore": (480, None), "Asia/Kuala_Lumpur": (480, None),
+    "Asia/Hong_Kong": (480, None), "Asia/Shanghai": (480, None), "Asia/Taipei": (480, None), "Asia/Manila": (480, None),
+    "Asia/Tokyo": (540, None), "Asia/Seoul": (540, None), "Asia/Jakarta": (420, None), "Asia/Bangkok": (420, None),
+    "Asia/Ho_Chi_Minh": (420, None), "Europe/London": (0, "eu"), "Europe/Dublin": (0, "eu"), "Europe/Lisbon": (0, "eu"),
+    "Europe/Paris": (60, "eu"), "Europe/Berlin": (60, "eu"), "Europe/Madrid": (60, "eu"), "Europe/Rome": (60, "eu"),
+    "Europe/Amsterdam": (60, "eu"), "Europe/Brussels": (60, "eu"), "Europe/Zurich": (60, "eu"), "Europe/Vienna": (60, "eu"),
+    "Europe/Stockholm": (60, "eu"), "Europe/Oslo": (60, "eu"), "Europe/Copenhagen": (60, "eu"), "Europe/Warsaw": (60, "eu"),
+    "Europe/Prague": (60, "eu"), "Europe/Athens": (120, "eu"), "Europe/Helsinki": (120, "eu"), "Europe/Kyiv": (120, "eu"),
+    "Europe/Kiev": (120, "eu"), "Europe/Istanbul": (180, None), "Europe/Moscow": (180, None),
+    "America/New_York": (-300, "us"), "America/Toronto": (-300, "us"), "America/Chicago": (-360, "us"),
+    "America/Denver": (-420, "us"), "America/Phoenix": (-420, None), "America/Los_Angeles": (-480, "us"),
+    "America/Sao_Paulo": (-180, None), "America/Mexico_City": (-360, None),
+    "Africa/Lagos": (60, None), "Africa/Nairobi": (180, None), "Africa/Johannesburg": (120, None),
+}
+_TZ_UNKNOWN = set()
+
+
+def _dst_on(rule, ms, std_minutes):
+    """True when a fallback zone is on daylight time at ms, with the real switch instants:
+    us 02:00 local (second Sunday of March to first Sunday of November), eu 01:00 UTC (last Sundays of
+    March and October), au 02:00 local standard time (first Sunday of October to first Sunday of April),
+    nz 02:00 local standard time (last Sunday of September to first Sunday of April)."""
+    u = utc_dt(ms).replace(tzinfo=None)
+    y = u.year
+    std = timedelta(minutes=std_minutes)
+    if rule == "us":
+        start = _nth_sunday(y, 3, 2) + timedelta(hours=2) - std
+        end = _nth_sunday(y, 11, 1) + timedelta(hours=1) - std          # 02:00 daylight is 01:00 standard
+        return start <= u < end
+    if rule == "eu":
+        return _nth_sunday(y, 3, -1) + timedelta(hours=1) <= u < _nth_sunday(y, 10, -1) + timedelta(hours=1)
+    if rule in ("au", "nz"):
+        end = _nth_sunday(y, 4, 1) + timedelta(hours=2) - std             # 03:00 daylight is 02:00 standard
+        start = (_nth_sunday(y, 10, 1) if rule == "au" else _nth_sunday(y, 9, -1)) + timedelta(hours=2) - std
+        return u < end or u >= start
+    return False
+
+
 def _tz_offset_minutes(ms, tzname):
     """Offset of a display time zone at a moment, in minutes. '+11:00' or an IANA name."""
     if not tzname or tzname.upper() == "UTC":
@@ -143,12 +188,23 @@ def _tz_offset_minutes(ms, tzname):
     if m:
         sign = 1 if m.group(1) == "+" else -1
         return sign * (int(m.group(2)) * 60 + int(m.group(3) or 0))
-    try:  # Python 3.9+ with a tz database; falls back to UTC quietly
+    try:  # Python 3.9+ with a tz database
         zi = importlib.import_module("zoneinfo")
         off = utc_dt(ms).astimezone(zi.ZoneInfo(tzname)).utcoffset()
         return int(off.total_seconds() // 60)
     except Exception:
-        return 0
+        pass
+    if tzname in FALLBACK_TZ:
+        std, rule = FALLBACK_TZ[tzname]
+        return std + (60 if rule and _dst_on(rule, ms, std) else 0)
+    _TZ_UNKNOWN.add(tzname)
+    return 0
+
+
+def tz_known(tzname):
+    """Whether a display_tz value can be shown here (doctor reports it when not)."""
+    _tz_offset_minutes(now_ms(), tzname)
+    return tzname not in _TZ_UNKNOWN
 
 
 def fmt_local(ms, tzname=None, date=True):
@@ -216,6 +272,7 @@ SESSIONS = {
     "london": "London 08:00 (07:00 or 08:00 UTC)",
     "ny": "New York 09:30, the US stock open (13:30 or 14:30 UTC)",
 }
+SESSION_NAMES = {"utc": "UTC day", "tokyo": "Tokyo", "london": "London", "ny": "New York"}
 
 
 def session_open_on(session, y, mo, d):
@@ -328,13 +385,17 @@ def append_jsonl(path, obj):
 
 
 def read_jsonl(path):
+    """Every record in a .jsonl log. A line that does not parse (one being written this instant) is skipped."""
     out = []
     try:
         with open(path, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
                 if line:
-                    out.append(json.loads(line))
+                    try:
+                        out.append(json.loads(line))
+                    except ValueError:
+                        continue
     except (IOError, OSError):
         pass
     return out
@@ -1643,7 +1704,8 @@ def market_regime(venue, cfg=None, breadth_n=30):
     d = venue.bars(btc["symbol"], "1d", 120)
     h = venue.bars(btc["symbol"], "1h", 24 * 30 + 1)
     c = closes(d)
-    e20, e50 = ema(c, 20)[-1], ema(c, 50)[-1]
+    e20s = ema(c, 20)
+    e20, e50 = e20s[-1], ema(c, 50)[-1]
     price = venue.ticker(btc["symbol"])["last"]
     out = {"btc": price, "btc_7d": c[-1] / c[-8] - 1.0 if len(c) > 8 else None,
            "btc_30d": c[-1] / c[-31] - 1.0 if len(c) > 31 else None,
@@ -1653,6 +1715,11 @@ def market_regime(venue, cfg=None, breadth_n=30):
         if price > e20 and e20 > e50:
             trend = 1
         elif price < e20 and e20 < e50:
+            trend = -1
+    elif e20 and len(e20s) > 6 and e20s[-6]:          # under 50 days of history: the 20-day average's own slope
+        if price > e20 > e20s[-6]:
+            trend = 1
+        elif price < e20 < e20s[-6]:
             trend = -1
     out["trend"] = trend
     hc = closes(h)

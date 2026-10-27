@@ -1,17 +1,14 @@
 ---
 name: crypto-entry
 description: >-
-  Entry Timer for crypto perpetual futures. Watches one setup bar by bar and
-  says the moment to get in: the first CLOSED bar that confirms it, using the
-  scanner's own rules (so a trigger here is the same hit the scanner and the
-  Time Machine see). Opening-range breakouts after the UTC, Tokyo, London or
-  New York open, 24-hour range breakouts, trend pullbacks, volume spikes, RSI
+  Entry Timer for crypto perpetual futures. Watches a setup bar by bar and
+  says the moment to get in: the first CLOSED bar that confirms it, by the
+  scanner's own rules. Opening-range breakouts after the UTC, Tokyo, London
+  or New York open, range breakouts, trend pullbacks, volume spikes, RSI
   reversals, a squeeze breaking out of its bands, or a price level the user
-  gives (--above for a long, --below for a short, optional volume check).
-  Says forming, waiting and how far, triggered with the time and the price,
-  stale (it fired earlier: chasing is a different trade) or expired, on one
-  coin or several, and writes crypto/entry.json for /crypto-exit. A watch
-  wakes at each bar close and replays past days on a pinned clock. It never
+  gives (--above, --below). Says waiting and how far, triggered with the
+  time and price, stale (chasing is a different trade) or expired, for one
+  coin or several, and writes crypto/entry.json for /crypto-exit. It never
   places an order. Use when the user says "tell me when to get in", "watch
   BTC", "has it broken out", "did it break the opening range", "entry
   signal", "time my entry", "alert me when ETH closes above 3,000", "wait

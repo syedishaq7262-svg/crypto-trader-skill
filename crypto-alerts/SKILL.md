@@ -95,9 +95,26 @@ rules expire at the plan's time limit.
 
 ## Example
 
-From the pack's offline test market (synthetic prices, not real data): a SOL
-long planned at 15:15, stop 169.800, target 175.827, out by 23:15, and
-`--macro 15`. The check at 17:50:
+From the pack's offline test market (synthetic prices, made-up calendar,
+not real data): the SOL long from /crypto-broker, placed at 15:15 with stop
+169.800, target 175.827 and out by 23:15.
+
+```
+$ alerts.py add --from-plan
+Added sol-plan-4ed5-stop: SOL below 169.800 (the plan's stop), until 2026-10-21 23:15 UTC.
+Added sol-plan-4ed5-target: SOL above 175.827 (the plan's target), until 2026-10-21 23:15 UTC.
+Added sol-plan-4ed5-time: at 2026-10-21 23:15 UTC: the plan's time limit: out, win or lose.
+alerts.py check rings them; alerts.py watch keeps checking. Alerts never place or close anything.
+$ alerts.py add --macro 15
+Added macro-15: 15 minutes before each USD high-impact release, until 2026-10-28 15:15 UTC.
+alerts.py check rings them; alerts.py watch keeps checking. Alerts never place or close anything.
+```
+
+A check at 17:00, and the one at 17:50:
+
+```
+Nothing rang at 2026-10-21 17:00 UTC. Watching 4 rules: SOL below 169.800 (1.70% away); SOL above 175.827 (1.79% away).
+```
 
 ```
 ALERT  SOL reached 175.827 (the plan's target): touched 175.868 at 17:47 UTC; now 175.365. If the take-profit order is on the exchange it has probably filled: /crypto-broker sync.

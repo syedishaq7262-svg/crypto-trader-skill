@@ -169,8 +169,12 @@ def check_order(o, cfg, ctx, venue, m, t, plan, tm):
             reasons.append("liquidation: estimated at %s, only %.1fx the stop distance away (need %gx). %dx or less passes."
                            % (P(liq), buf, need, safe))
     # positions and counts
-    if any(p["symbol"] == sym for p in ctx["positions"]):
-        reasons.append("duplicate: a %s position is already open; this pack does not add to positions" % sym)
+    coin = o.get("coin") or cc.clean_coin(sym)
+    same = [p for p in ctx["positions"] if (p.get("coin") or cc.clean_coin(p.get("symbol") or "")) == coin]
+    if same:
+        other = same[0].get("venue")
+        reasons.append("duplicate: a %s position is already open%s; this pack does not add to positions, even on "
+                       "another exchange" % (coin, (" on %s" % other.capitalize()) if other and other != o.get("venue") else ""))
     if len(ctx["positions"]) >= int(cfg.get("max_open_positions") or 1):
         reasons.append("positions: %d open already, your max is %d" % (len(ctx["positions"]), int(cfg["max_open_positions"])))
     if ctx["entries"] >= int(cfg.get("max_trades_per_day") or 1):
@@ -222,9 +226,16 @@ def main(argv=None):
     if not doc or not doc.get("orders"):
         raise cc.CryptoError("no orders to check. Size a plan first: /crypto-budget")
     stats = cc.today_stats(cfg)
-    ctx = {"blocked": set(str(x).upper() for x in cfg.get("blocked") or []), "positions": list(stats["open"]),
-           "entries": stats["entries"], "realized": stats["realized"], "open_risk": stats["open_risk"],
-           "margin_used": stats["open_margin"], "last_closes": stats["last_closes"], "max_drift_r": a.max_drift_r}
+    waiting = []
+    for w in (cc.read_json(cc.wpath("positions.json"), None) or {}).get("pending") or []:
+        wo = w.get("order") or {}
+        waiting.append({"symbol": wo.get("symbol"), "coin": wo.get("coin"), "venue": wo.get("venue"),
+                        "margin": cc.fnum(wo.get("margin"), 0.0), "loss_at_stop_usd": cc.fnum(wo.get("loss_at_stop_usd"), 0.0)})
+    ctx = {"blocked": set(str(x).upper() for x in cfg.get("blocked") or []), "positions": list(stats["open"]) + waiting,
+           "entries": stats["entries"], "realized": stats["realized"],
+           "open_risk": stats["open_risk"] + sum(w["loss_at_stop_usd"] for w in waiting),
+           "margin_used": stats["open_margin"] + sum(w["margin"] for w in waiting), "last_closes": stats["last_closes"],
+           "max_drift_r": a.max_drift_r}
     plan = cc.read_json(cc.wpath("plan.json"), None)
     tm_doc = cc.read_json(cc.wpath("timemachine.json"), None)
     venues = {}
@@ -251,7 +262,8 @@ def main(argv=None):
         results.append((i, o, verdict, reasons, warns, facts))
         if verdict == "PASS" and not is_exit(o):
             # later orders in the same batch see this one as filled
-            ctx["positions"].append({"symbol": o["symbol"], "margin": facts.get("margin", 0)})
+            ctx["positions"].append({"symbol": o["symbol"], "coin": o.get("coin"), "venue": o.get("venue"),
+                                     "margin": facts.get("margin", 0)})
             ctx["entries"] += 1
             ctx["open_risk"] += facts.get("loss_usd") or 0.0
             ctx["margin_used"] += facts.get("margin") or 0.0

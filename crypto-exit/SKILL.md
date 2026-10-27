@@ -104,7 +104,11 @@ costs over 0.2R at a stop-out, funding of 30% a year or more against the
 side, a price that has moved a quarter of the risk from the trigger, a
 target beyond the 7-day range, a swing level between the entry and the
 target, reward:risk under `min_reward_risk` (crypto-risk will block it), a
-setup that has already failed or run.
+setup that has already failed or run, a market entry more than an hour after
+the trigger (a late entry: the setup's record is of entries at the trigger).
+
+Without a hit and without `--side`, it asks for a side, and says whether
+there is no scan yet or the last scan had no setup on that coin.
 
 ## Steps
 
@@ -124,23 +128,31 @@ setup that has already failed or run.
 
 ## Example
 
-From the pack's offline test market (synthetic prices, not real data): an
-opening-range breakout after the New York open, planned 55 minutes after the
-trigger, so it enters at the market.
+From the pack's offline test market (synthetic prices, not real data): the
+New York opening-range breakout that /crypto-entry caught on ORBX at 14:20,
+planned 55 minutes later, so it enters at the market.
 
 ```
 Exit plan | ORBX long | Binance ORBXUSDT | 2026-10-21 15:15 UTC
-  Setup        opening-range breakout (New York open, 17.191 to 17.399), triggered 14:20 UTC, holding
-  Entry        17.563  now, at the market (the trigger was 17.521 at 14:20 UTC)
-  Stop         17.295  setup: the opening-range midpoint (17.399 + 17.191) / 2, rounded away from the entry
-  Target       18.099  2R (2 x the risk)
-  Risk         0.268 a coin (1.53% of the entry; 2.2 x the 15-minute ATR)
+  Setup        opening-range breakout (New York open, 21.002 to 21.255), triggered 14:20 UTC, holding
+  Entry        21.456  now, at the market (the trigger was 21.404 at 14:20 UTC)
+  Stop         21.128  setup: the opening-range midpoint (21.255 + 21.002) / 2, rounded away from the entry
+  Target       22.112  2R (2 x the risk)
+  Risk         0.328 a coin (1.53% of the entry; 2.5 x the 15-minute ATR)
   Reward:risk  2.00 before costs; after fees and slippage a win nets +1.93R and a stop-out -1.11R
-  Costs        taker 0.050%, maker 0.020%, slippage 3.8 bps, measured from the order book for a $10.0K order
-  Funding      +0.0243%/8h (+26.6% a year), longs pay; a full hold crosses 3 payments: -0.05R for this side
-  Break-even   the target must come first in 36.6% of trades that hit a side (fees and slippage included)
+  Costs        taker 0.050%, maker 0.020%, slippage 3.1 bps, measured from the order book for a $10.0K order
+  Funding      +0.0127%/8h (+13.9% a year), longs pay; a full hold crosses 3 payments: -0.02R for this side
+  Break-even   the target must come first in 36.4% of trades that hit a side (fees and slippage included)
   Out by       2026-10-22 15:15 UTC (24h), win or lose
+  Warning      The target is beyond the 7-day range (19.122 to 21.886).
+  Warning      A 1-hour swing high at 21.886 sits between the entry and the target.
+A stop is a plan, not a guarantee: a fast market can fill past it.
+Next: /crypto-timemachine to replay this plan, then /crypto-budget to size it.
 ```
+
+The two warnings say the 2R target asks for a price ORBX has not traded at
+in a week, through a level where it turned before. A 1.5R target, or no
+trade, are both fair answers; the planner does not pick for the user.
 
 ## Rules
 

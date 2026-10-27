@@ -2,16 +2,15 @@
 name: crypto-scout
 description: >-
   Scout for crypto perpetual futures: what is worth a look today, ranked by
-  evidence instead of excitement. Scans every liquid perpetual (or reuses a
-  scan under 15 minutes old), reads the market regime, plans the strongest
-  live setups with the Exit Planner's defaults, then tests each one on its
+  evidence instead of excitement. Scans every liquid perpetual, reads the
+  market regime, plans the strongest live setups, then tests each on its
   own coin's last 30 days with the Time Machine: replays, the same rule's
   past trades, and an edge test against random entries at the same hours,
   all after fees, slippage and funding. Corrects for testing many setups at
-  once (Benjamini-Hochberg), flags trades that have already run, crowded
-  sides, costly funding and a regime against the side, and sorts them into
-  has the evidence, worth watching, no edge, and cannot be tested. Often
-  the honest answer is that nothing qualifies today. `pick N` hands one to
+  once (Benjamini-Hochberg), flags trades that already ran, crowded sides,
+  costly funding and a regime against the side, and sorts them into has
+  the evidence, worth watching, no edge, and cannot be tested. Often the
+  honest answer is that nothing qualifies today. `pick N` hands one to
   /crypto-budget. Use when the user says "what should I trade today", "what
   is worth trading", "find me a trade", "best setups right now", "anything
   good today", "what has an edge", "where should I put money today", or
@@ -96,7 +95,10 @@ with one plain line on a problem.
 Within a tier, setups rank by their edge over random entries, shrunk toward
 zero when there are few trades. A squeeze that is coiled but has not broken
 has no side yet: the board lists it, and `/crypto-entry COIN --setup squeeze`
-waits for the break.
+waits for the break. Opening-range breakouts whose entry window (4 hours
+after the open) has closed are left out and named: their record is of
+entries at the trigger, and a late entry is a different trade. The board
+names the most recent session whose range is fresh.
 
 ## Steps
 
@@ -122,27 +124,40 @@ shortened:
 
 ```
 Scout | Binance USD-M futures | 2026-10-21 15:15 UTC
-Regime: Mixed. No clear tide. Setups stand on their own; size down and be picky.
-46 setups live in the scan; 10 tested on each coin's own last 30 days, after fees, slippage and funding.
+Regime: Risk-on. BTC trends up and most coins follow. Long breakouts have the wind behind them.
+41 setups live in the scan; 10 tested on each coin's own last 30 days, after fees, slippage and funding. 3 coiled squeezes with no side yet (FUNDX, BRKX, BRKD): /crypto-entry COIN --setup squeeze waits for the break.
+Left out, already failed or run: WIF short orb, SOL long orb, XRP long orb, APT long orb, ADA short orb, INJ long orb.
+Left out, opening-range breakouts past their 4h00m entry window (LINK long, BTC short, BONK short, DOGE short, SUI short, OP short and 6 more): a late entry is a different trade. For a fresh range: scout.py --session ny (the New York open, 1h45m ago).
 
-Worth watching (positive, not proven) (4)
+Worth watching (positive, not proven) (3)
  1. VOLX long, volume spike (spike 15:15 UTC)
      history +1.96R a trade over 3 trades, target first 3 of 3; random entries +0.00R; luck matches it 0.2% of the time (still clear after testing 10 setups at once)
      plan: entry 0.68892, stop 0.66998, target 0.72680 (2.0R), out within 24h; replays: leans toward the stop
  2. TIA short, range breakout (fresh 15:15 UTC)
      history +0.04R a trade over 16 trades, target first 6 of 16; random entries -0.23R; luck matches it 19% of the time
      plan: entry 5.0083, stop 5.1027, target 4.8195 (2.0R), out within 24h; replays: close to break-even
+     note: a short in a Risk-on market
+ 3. TRDX long, trend pullback (reclaimed 15:15 UTC)
+     history +0.61R a trade over 44 trades, target first 24 of 39; random entries +0.56R; luck matches it 40% of the time
+     plan: entry 76.274, stop 75.223, target 78.376 (2.0R), out within 24h; replays: mostly out of time
 
-No edge on this coin lately (6)
- 6. BRKD short, range breakout (fresh 15:15 UTC)
-     history -0.15R a trade over 12 trades, target first 4 of 12; random entries -0.24R; luck matches it 30% of the time
+No edge on this coin lately (7)
+ 4. ORBX long, trend pullback (reclaimed 15:15 UTC)
+     history -0.05R a trade over 24 trades, target first 7 of 20; random entries -0.12R; luck matches it 38% of the time
+     plan: entry 21.469, stop 21.001, target 22.405 (2.0R), out within 24h; replays: leans toward the stop
+ 6. ETH short, squeeze break (broke down 15:00 UTC)
+     history -0.07R a trade over 3 trades, target first 1 of 3; random entries -0.30R; luck matches it 42% of the time
+     plan: entry 3,435.04, stop 3,476.50, target 3,352.12 (2.0R), out within 24h; replays: leans toward the stop
+     note: a short in a Risk-on market
 
 Nothing has the evidence today: no setup beat random entries on its own coin's last 30 days clearly enough to survive testing them all at once, with nothing against it. Not trading is a position too.
+Evidence, not a promise or advice. To take one further: scout.py pick N, then /crypto-budget.
 ```
 
 VOLX's three past trades all won, and random entries rarely do that, but
-three trades is not a record. That is why it is worth watching and not
-evidence.
+three trades is not a record. TRDX made +0.61R a trade over 44 trades, yet
+random long entries on TRDX made +0.56R: the setup added little to what
+simply being long earned. Both are worth watching, and neither is evidence.
 
 ## Rules
 

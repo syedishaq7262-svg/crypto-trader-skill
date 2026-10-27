@@ -111,30 +111,39 @@ over 10 or more trades, a limit through the price, no time limit.
 ## Example
 
 From the pack's offline test market (synthetic prices, not real data). The
-ORBX order passes at 15:15:
+ORBX order passes at 15:15, with the Time Machine's verdict as a warning:
 
 ```
-PASS  #1 long ORBX 32, entry, 2x isolated
-          entry 17.563 (the plan's entry), stop 17.295, target 18.099
-          max loss $9.97 (limit $10.00), reward:risk 2.00 (min 1.5), liquidation 9.011, 31.9x the stop distance
+PASS  #1 long ORBX 26, entry, 2x isolated
+          entry 21.456 (the plan's entry), stop 21.128, target 22.112
+          max loss $9.64 (limit $10.00), reward:risk 2.00 (min 1.5), liquidation 11.009, 31.9x the stop distance
           today before this: 0 of 4 trades, $0.00 lost, $0.00 at risk open; daily limit $30.00
+        ! history: the setup lost 0.89R a trade after costs over its last 11 trades here
+
+1 passed, 0 blocked at 2026-10-21 15:15 UTC. A PASS lasts 15 minutes and only means the order may be shown to you; it is not a yes.
+Next: /crypto-broker shows the ticket and asks for your yes.
 ```
 
-At 16:00, after the price ran to 17.863, the same order is blocked three times:
+At 16:00 the price is 21.494. The same 26 coins now lose more than $10 at
+the stop, so the same order is blocked:
 
 ```
-BLOCK #1 long ORBX 32, entry, 2x isolated
-        - moved: the price is 1.12R from the planned entry (limit 0.50R). Re-plan with /crypto-exit.
-        - loss: 32 x 0.613 at the stop (fees, slippage, funding included) = $19.61, over your $10.00 max loss per trade
-        - reward:risk: 0.42 from the price now, under your 1.5 minimum
+BLOCK #1 long ORBX 26, entry, 2x isolated
+          entry 21.494 (the price now), stop 21.128, target 22.112
+          max loss $10.70 (limit $10.00), reward:risk 1.69 (min 1.5), liquidation 11.028, 28.6x the stop distance
+          today before this: 0 of 4 trades, $0.00 lost, $0.00 at risk open; daily limit $30.00
+        - loss: 26 x 0.412 at the stop (fees, slippage, funding included) = $10.70, over your $10.00 max loss per trade
+        ! history: the setup lost 0.89R a trade after costs over its last 11 trades here
+
+0 passed, 1 blocked at 2026-10-21 16:00 UTC. Nothing can be sent.
 ```
 
-After two losing trades today and a short still open, it is blocked by the
-day and by the cooldown:
+After two losing trades today and a BTC short still open, the 15:15 order is
+blocked by the day and by the cooldown:
 
 ```
-        - daily loss: $19.30 lost today + $8.00 at risk in open positions + $9.97 here = $37.27, over your $30.00 a day
-        - cooldown: 2 losses in a row; no new entries until 2026-10-22 01:30 UTC. A pause beats a revenge trade.
+        - daily loss: $19.30 lost today + $8.00 at risk in open positions + $9.64 here = $36.94, over your $30.00 a day
+        - cooldown: 2 losses in a row; no new entries until 2026-10-22 00:30 UTC. A pause beats a revenge trade.
 ```
 
 ## Rules

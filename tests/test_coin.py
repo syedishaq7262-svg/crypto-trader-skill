@@ -65,6 +65,19 @@ class Card(unittest.TestCase):
             self.assertIn("book", d["errors"])
             self.assertNotIn("book", d)
 
+    def test_headlines_macro_and_notices_on_the_card(self):
+        with Session() as s:
+            code, out, err = s.run(*COIN, ["SOL", "--venue", "binance"])
+            self.assertIn('News       2 headlines in 24h; latest: "SOL Climbs as Solana Funds Draw Fresh Inflows" (CoinDesk', out)
+            self.assertIn("Macro      US CPI m/m in 2h45m", out)
+            code, out, err = s.run(*COIN, ["THINX", "--venue", "binance"])
+            self.assertIn("News       no headline naming THINX in 24h", out)
+            self.assertIn("! Bybit announced a delisting", out)
+            code, out, err = s.run(*COIN, ["SOL", "--venue", "binance", "--no-news", "--json"])
+            d = json.loads(out)
+            self.assertNotIn("news", d)
+            self.assertNotIn("macro", d)
+
     def test_btc_card_has_no_btc_comparison(self):
         with Session() as s:
             code, out, err = s.run(*COIN, ["btc", "--venue", "bybit", "--json"])

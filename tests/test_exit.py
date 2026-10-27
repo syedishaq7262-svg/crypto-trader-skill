@@ -56,19 +56,18 @@ class FromAHit(unittest.TestCase):
             s.run(*SCAN, ["--venue", "binance", "--setups", "squeeze"])
             w = cc.read_json(s.path("watchlist.json"))
             sq = [h for h in w["hits"] if h["coin"] == "SQZX"]
-            self.assertEqual(sorted(h["status"] for h in sq), ["broke down", "coiled"])
+            self.assertEqual([h["status"] for h in sq], ["broke down"])    # broken out, so no longer listed as coiled
+            self.assertEqual([h["status"] for h in w["hits"] if h["coin"] == "FUNDX"], ["coiled"])
             code, out, err = s.run(*EXIT, ["plan", "SQZX"])
             self.assertEqual(code, 0, err)                                # the break: a side and a setup stop
             p = plan_of(s)
             self.assertEqual((p["side"], p["stop_spec"]), ("short", "setup"))
             self.assertIn("the middle band", p["stop_rule"])
-            w["hits"] = [h for h in w["hits"] if h["status"] == "coiled"]
-            cc.write_json(s.path("watchlist.json"), w)
-            code, out, err = s.run(*EXIT, ["plan", "SQZX"])
+            code, out, err = s.run(*EXIT, ["plan", "FUNDX"])
             self.assertEqual(code, 1)
             self.assertIn("which side", err)
             self.assertIn("a squeeze has no side until a band breaks", err)
-            code, out, err = s.run(*EXIT, ["plan", "SQZX", "--side", "long"])
+            code, out, err = s.run(*EXIT, ["plan", "FUNDX", "--side", "long"])
             self.assertEqual(code, 0, err)                                # no setup stop: atr:1.5 by default
             self.assertTrue(plan_of(s)["stop_spec"].startswith("atr:"))
 
@@ -114,6 +113,15 @@ class Manual(unittest.TestCase):
             else:
                 self.assertIn("at least 1R", err)
 
+    def test_a_late_entry_says_so(self):
+        with Session() as s:
+            s.run(*SCAN, ["--venue", "binance", "--setups", "orb"])               # the UTC-day range, 15 hours old
+            code, out, err = s.run(*EXIT, ["plan", "LINK"])
+            self.assertEqual(code, 0, err)
+            self.assertIn("so this is a late entry", out)
+            p = plan_of(s)
+            self.assertEqual(p["entry_rule"], "market")
+
     def test_refusals(self):
         with Session() as s:
             cases = [
@@ -121,6 +129,7 @@ class Manual(unittest.TestCase):
                 (["plan", "BTC", "--side", "long", "--manual", "--stop", "pct:0.01"], "tighter than the spread"),
                 (["plan", "BTC", "--side", "long", "--manual", "--target", "1000"], "is not over the entry"),
                 (["plan", "BTC", "--manual"], "which side"),
+                (["plan", "ORBX"], "or run /crypto-scanner first to plan from a setup"),       # no scan saved yet
                 (["plan", "NOPE", "--side", "long", "--manual"], "no USDT perpetual"),
                 (["plan", "BTC", "--side", "long", "--manual", "--stop", "fancy"], "unknown stop"),
                 (["plan", "BTC", "--side", "long", "--manual", "--hold", "forever"], "hold time"),
@@ -130,6 +139,9 @@ class Manual(unittest.TestCase):
                 code, out, err = s.run(*EXIT, argv)
                 self.assertEqual(code, 1, argv)
                 self.assertIn(msg, err, argv)
+            s.run(*SCAN, ["--venue", "binance", "--setups", "volume"])
+            code, out, err = s.run(*EXIT, ["plan", "ORBX"])
+            self.assertIn("the last scan has no setup on ORBX", err)
 
     def test_shorts_off(self):
         with Session(config={"allow_short": False}) as s:

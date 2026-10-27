@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "crypto-trader-skill",
+  "description": "The Crypto Trader skill pack for Claude",
+  "owner": {
+    "name": "syedishaq7262-svg",
+    "url": "https://github.com/syedishaq7262-svg"
+  },
+  "plugins": [
+    {
+      "name": "crypto-trader-skill",
+      "description": "Sixteen Claude skills for crypto day trading: a scout that ranks setups by evidence, a chart scanner, a coin report, a derivatives radar, a news monitor, whale watch, an entry timer, an exit planner, a time machine that replays 10,000 outcomes, a budget manager, a liquidation guard, a risk manager, an order executor (paper by default, never without your yes), alerts, a trading journal and a setup doctor.",
+      "source": "./",
+      "category": "productivity",
+      "homepage": "https://github.com/syedishaq7262-svg/crypto-trader-skill"
+    }
+  ]
+}

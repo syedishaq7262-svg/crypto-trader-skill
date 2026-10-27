@@ -109,14 +109,25 @@ ORBX plan, a $1,000 account, $10 max loss, 3x max leverage.
 
 ```
 Budget | ORBX long | Binance ORBXUSDT | 2026-10-21 15:15 UTC
-Size: 32 ORBX, about $562.02 at about 17.563; 2x isolated, margin $281.01.
+Size: 26 ORBX, about $557.86 at about 21.456; 2x isolated, margin $278.93.
 limit             the math                                                                  qty
-max loss          $10.00 / 0.312 a coin (the stop 0.268 + fees, slippage, funding 0.044)  32.10
-margin cap        50% of $1,000.00 = $500.00 of margin x 3x leverage / 17.563             85.41
+max loss          $10.00 / 0.371 a coin (the stop 0.328 + fees, slippage, funding 0.043)  26.97
+margin cap        50% of $1,000.00 = $500.00 of margin x 3x leverage / 21.456             69.91
 exchange minimum  min size 1, min order $5.00                                                ok
-The max loss decides it: 32 ORBX.
+The max loss decides it: 26 ORBX.
 Leverage 2x: the lowest that keeps the margin under $500.00. Caps: your max 3x; liquidation at least 2x the stop distance allows up to 18x.
+Stop 21.128 (stop-market, reduce-only, triggered by the mark price): lose about $9.64 there, fees, slippage and funding included.
+Target 22.112 (limit, reduce-only): make about $16.27 there after fees. Reward:risk 2.00.
+Estimated liquidation 11.009 (48.7% away); the stop is 1.53% away (Binance tier-1 estimate, maintenance 2.50%).
+Out by 2026-10-22 15:15 UTC, win or lose.
+Time Machine: no edge. The setup lost 0.89R a trade after costs over its last 11 trades here (random entries: -0.23R).
+Paper trading. A stop is an order, not a promise: in a fast market it can fill past the stop.
+Next: /crypto-liquidation to double-check the liquidation, then /crypto-risk.
 ```
+
+The size rounds down to the exchange's step (26.97 becomes 26), so the loss
+at the stop is $9.64, under the $10 limit. The Time Machine's verdict rides
+along so it is in front of the user again at the moment of sizing.
 
 ## Rules
 

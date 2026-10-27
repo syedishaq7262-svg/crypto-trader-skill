@@ -59,6 +59,29 @@ class Clock(unittest.TestCase):
 
 
 class Names(unittest.TestCase):
+    def test_time_zones_without_a_tz_database(self):
+        """Python 3.8 and Windows without tzdata have no zone database: the built-in table must match it."""
+        import importlib
+        real = importlib.import_module
+        try:
+            def no_zoneinfo(name, *a, **k):
+                if name == "zoneinfo":
+                    raise ImportError("no zone database here")
+                return real(name, *a, **k)
+            cc.importlib.import_module = no_zoneinfo
+            melb = lambda t: cc.fmt_local(cc.parse_when(t), "Australia/Melbourne")
+            self.assertEqual(melb("2026-10-26 10:00"), "2026-10-26 21:00 (UTC+11)")       # daylight time
+            self.assertEqual(melb("2026-06-01 10:00"), "2026-06-01 20:00 (UTC+10)")       # standard time
+            self.assertEqual(melb("2026-04-04 15:59"), "2026-04-05 02:59 (UTC+11)")       # a minute before it ends
+            self.assertEqual(melb("2026-04-04 16:00"), "2026-04-05 02:00 (UTC+10)")       # 03:00 becomes 02:00
+            self.assertEqual(cc.fmt_local(cc.parse_when("2026-07-01 12:00"), "America/New_York"), "2026-07-01 08:00 (UTC-4)")
+            self.assertEqual(cc.fmt_local(cc.parse_when("2026-12-01 12:00"), "Europe/London"), "2026-12-01 12:00 UTC")
+            self.assertEqual(cc.fmt_local(cc.parse_when("2026-12-01 12:00"), "Asia/Kolkata"), "2026-12-01 17:30 (UTC+5:30)")
+            self.assertFalse(cc.tz_known("Mars/Olympus"))
+            self.assertTrue(cc.tz_known("Australia/Perth"))
+        finally:
+            cc.importlib.import_module = real
+
     def test_multipliers(self):
         self.assertEqual(cc.split_multiplier("1000PEPE"), ("PEPE", 1000))
         self.assertEqual(cc.split_multiplier("SHIB1000"), ("SHIB", 1000))

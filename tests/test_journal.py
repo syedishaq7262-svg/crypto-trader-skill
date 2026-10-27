@@ -43,11 +43,42 @@ class Stats(unittest.TestCase):
             self.assertIn("Break-even at your average win and loss: 33%. Your win rate is above it, and the range includes it.", out)
             self.assertIn("Max drawdown -$30.00 (-3.0R)", out)                     # the three losses in a row
             self.assertIn("Longest losing streak 3; now 1 loss in a row.", out)
-            self.assertIn("Costs: fees $5.00, funding $1.00", out)
+            self.assertIn("Costs: fees $5.00, funding paid $1.00", out)
             self.assertIn("Losers were held 3.0x longer than winners", out)
             d = cc.read_json(s.path("journal.json"))
             self.assertAlmostEqual(d["stats"]["avg_r"], 0.2)
             self.assertAlmostEqual(d["stats"]["profit_factor"], 80.0 / 60.0)
+
+    def test_one_winning_trade_reads_well(self):
+        with Session(now="2026-10-21 15:15") as s:
+            trade(s, 0, 2.0, setup="orb", coin="SOL")
+            led = cc.read_jsonl(s.path("ledger.jsonl"))
+            for row in led:                                       # a long that was paid funding
+                if row.get("type") == "close":
+                    row["funding"] = -0.15
+            with open(s.path("ledger.jsonl"), "w") as fh:
+                fh.write("\n".join(cc.json.dumps(r) for r in led) + "\n")
+            code, out, err = s.run(*J, ["--days", "0"])
+            self.assertIn("1 trade is too few to judge", out)
+            self.assertIn("Average win +2.00R (+$20.00), no losses yet.", out)
+            self.assertNotIn("Best ", out)                         # best and worst are the same trade
+            self.assertIn("funding received $0.15: net ", out)
+            self.assertNotIn(" -  ", out)
+            for line in out.splitlines():
+                self.assertEqual(line, line.rstrip())
+
+    def test_trades_list_and_streak_words(self):
+        with Session(now="2026-10-21 15:15") as s:
+            for i, r in enumerate([-1.0, 2.0, 2.0]):
+                trade(s, i, r)
+            code, out, err = s.run(*J, ["--days", "0"])
+            self.assertIn("now 2 wins in a row.", out)
+            code, out, err = s.run(*J, ["trades", "--recent", "2"])
+            lines = out.splitlines()
+            self.assertEqual(len(lines), 2)
+            self.assertTrue(lines[0].startswith("t2  "), lines[0])           # the id column is as wide as the ids
+            code, out, err = s.run(*J, ["trades"])
+            self.assertEqual(len(out.splitlines()), 3)
 
     def test_filters_and_breakdowns(self):
         with Session(now="2026-10-21 15:15") as s:
@@ -56,7 +87,8 @@ class Stats(unittest.TestCase):
             trade(s, 2, -1.0, setup=None, coin="ETH")
             code, out, err = s.run(*J, ["--days", "0"])
             self.assertIn("By setup:", out)
-            self.assertIn("manual 1 (0 won) -1.00R", out)
+            self.assertIn("own plan 1 (0 won) -1.00R", out)
+            self.assertIn("opening range 1 (1 won) +2.00R", out)
             self.assertIn("By side:", out)
             code, out, err = s.run(*J, ["--days", "0", "--coin", "ETH", "--json"])
             self.assertEqual(json.loads(out)["stats"]["n"], 2)

@@ -801,7 +801,7 @@ def print_run(d, plan):
         words = SETUP_WORDS.get(name, name)
         sess = ((plan.get("setup") or {}).get("params") or {}).get("session")
         if name == "orb" and sess:
-            words += " (%s open)" % {"utc": "UTC day", "tokyo": "Tokyo", "london": "London", "ny": "New York"}.get(sess, sess)
+            words += " (%s open)" % cc.SESSION_NAMES.get(sess, sess)
         n = hist.get("n") or 0
         cc.out("History: the same %s rule on the pool fired %d time%s; %d became %s, one at a time." %
                (words, hist["events"], "" if hist["events"] == 1 else "s", n, "a trade" if n == 1 else "trades"))

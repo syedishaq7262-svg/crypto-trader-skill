@@ -73,7 +73,7 @@ def nearest_levels(bars, price, side, n=2):
     return out
 
 
-def build(venue, text, cfg, with_setups=True):
+def build(venue, text, cfg, with_setups=True, with_news=True):
     m = venue.market(text)
     sym = m["symbol"]
     tk = venue.tickers()
@@ -92,6 +92,12 @@ def build(venue, text, cfg, with_setups=True):
     if m["coin"] != "BTC":
         bm = venue.market("BTC")
         jobs["btc1h"] = lambda: venue.bars(bm["symbol"], "1h", 170)
+    news = load_sibling("crypto-news", "news") if with_news else None
+    if news is not None:
+        known = set(x["coin"] for x in venue.markets())
+        jobs["news"] = lambda: news.coin_headlines(m["coin"], known, cfg)
+        jobs["macro"] = lambda: news.macro_soon(24.0)
+        jobs["notices"] = lambda: news.notices(known)[0]
     names = list(jobs)
     res = cc.parallel(lambda k: jobs[k](), names, workers=2 if venue.name == "hyperliquid" else 6)
     got = {}
@@ -187,6 +193,16 @@ def build(venue, text, cfg, with_setups=True):
         if scan is not None:
             x = scan.Ctx(m, t, b5, b1h)
             d["setups"] = scan.setups_for(x, cfg.get("session"))
+    if "news" in got:
+        heads, ok, total = got["news"]
+        d["news"] = {"count": len(heads), "feeds_ok": ok, "feeds": total,
+                     "items": [{"title": h["title"], "source": h["source"], "at": h["at"], "link": h["link"],
+                                "tags": h.get("tags") or [], "important": h.get("important"), "also": h.get("also") or []}
+                               for h in heads[:3]]}
+    if got.get("macro") is not None:
+        d["macro"] = [{"title": e["title"], "country": e["country"], "at": e["at"]} for e in got["macro"]]
+    if got.get("notices"):
+        d["notices"] = [n for n in got["notices"] if m["coin"] in (n.get("coins") or []) and now - n["at"] <= 14 * DAY]
     d["notes"] = notes_for(d, cfg)
     return d
 
@@ -194,6 +210,13 @@ def build(venue, text, cfg, with_setups=True):
 def notes_for(d, cfg):
     out = []
     now = d["as_of"]
+    for n in d.get("notices") or []:
+        if n.get("kind") == "delistings":
+            out.append("! %s announced a delisting %s ago: \"%s\". Positions are closed at the delisting time." % (
+                n.get("source", "An exchange"), cc.fmt_dur(now - n["at"]), n["title"]))
+        else:
+            out.append("%s announced a listing %s ago: \"%s\"." % (n.get("source", "An exchange"), cc.fmt_dur(now - n["at"]),
+                                                               n["title"]))
     if d.get("listed_ms") and now - d["listed_ms"] < 30 * DAY:
         out.append("Listed %s ago: little history, so every statistic here is thin." % cc.fmt_dur(now - d["listed_ms"]))
     if (d.get("volume_24h") or 0) < cfg.get("min_quote_volume_usd", 2e7):
@@ -220,6 +243,8 @@ def notes_for(d, cfg):
 
 
 TREND_WORD = {"up": "up", "down": "down", "mixed": "mixed", None: "-"}
+SETUP_WORDS = {"orb": "opening-range breakout", "breakout": "range breakout", "squeeze": "squeeze", "trend": "trend pullback",
+               "reversal": "RSI reversal", "volume": "volume spike", "rs": "relative strength"}
 
 
 def print_card(d):
@@ -237,10 +262,10 @@ def print_card(d):
         rng += "  |  7d %s to %s" % (P(d["low_7d"]), P(d["high_7d"]))
     cc.out("Range      " + rng)
     tr = d["trend"]
-    cc.out("Trend      15m %s . 1h %s . 4h %s . 1d %s   (price against its 20 and 50 averages)" %
+    cc.out("Trend      15m %s, 1h %s, 4h %s, 1d %s   (price against its 20 and 50 averages)" %
            tuple(TREND_WORD[tr[k]] for k in ("15m", "1h", "4h", "1d")))
     rs = d["rsi"]
-    cc.out("Momentum   RSI 1h %s . 4h %s . 1d %s" % tuple(("%.0f" % rs[k]) if rs.get(k) is not None else "-" for k in ("1h", "4h", "1d")))
+    cc.out("Momentum   RSI 1h %s, 4h %s, 1d %s" % tuple(("%.0f" % rs[k]) if rs.get(k) is not None else "-" for k in ("1h", "4h", "1d")))
     vl = []
     if d.get("atr_1h_pct"):
         vl.append("typical hour %s" % cc.fmt_pct(d["atr_1h_pct"], 2, False))
@@ -275,7 +300,10 @@ def print_card(d):
             cc.fmt_small_pct(b["spread"]), "" if b["reach"] else "at least ", cc.fmt_usd(b["bid_usd"]), cc.fmt_usd(b["ask_usd"]))
     cc.out("Liquidity  " + vline)
     if d.get("impact_10k") is not None:
-        cc.out("           a $10,000 market buy would fill about %s above the mid" % cc.fmt_small_pct(d["impact_10k"]))
+        if d["impact_10k"] < 0.00001:
+            cc.out("           a $10,000 market buy would barely move it (under 0.001% from the mid)")
+        else:
+            cc.out("           a $10,000 market buy would fill about %s above the mid" % cc.fmt_small_pct(d["impact_10k"]))
     fs = d.get("funding")
     if fs:
         fl = cc.fmt_funding(fs["rate"], fs["hours"])
@@ -313,8 +341,26 @@ def print_card(d):
     sp = cc.spark(d.get("spark_7d") or [], 28)
     if sp:
         cc.out("7 days     " + sp)
+    nw = d.get("news")
+    if nw is not None:
+        now = d["as_of"]
+        if nw["count"]:
+            h = nw["items"][0]
+            cc.out("News       %s%d headline%s in 24h; latest: \"%s\" (%s, %s ago)%s%s" % (
+                "! " if any(i.get("important") for i in nw["items"]) else "", nw["count"], "" if nw["count"] == 1 else "s",
+                h["title"], h["source"] + ((" +%d more" % len(h["also"])) if h["also"] else ""), cc.fmt_dur(now - h["at"]),
+                (" [%s]" % ", ".join(h["tags"][:3])) if h["tags"] else "", "  /crypto-news has the rest" if nw["count"] > 1 else ""))
+        else:
+            cc.out("News       no headline naming %s in 24h (%d of %d feeds read)" % (d["coin"], nw["feeds_ok"], nw["feeds"]))
+    if d.get("macro") is not None:
+        now = d["as_of"]
+        ev = ["US %s %s" % (e["title"], ("in %s" % cc.fmt_dur(e["at"] - now)) if e["at"] > now else
+                            ("out %s ago" % cc.fmt_dur(now - e["at"]))) for e in d["macro"][:3]]
+        cc.out("Macro      " + ("; ".join(ev) if ev else "no high-impact US release in the next 24h"))
     if d.get("setups"):
-        cc.out("Setups now " + "; ".join("%s %s (%s)" % (h["setup"], h["side"], h["status"]) for h in d["setups"]))
+        cc.out("Setups now " + "; ".join("%s%s (%s)" % (SETUP_WORDS.get(h["setup"], h["setup"]),
+                                                          (" " + h["side"]) if h["side"] in cc.SIDES else "", h["status"])
+                                         for h in d["setups"]))
     else:
         cc.out("Setups now none of the scanner's six single-coin setups")
     for n in d.get("notes") or []:
@@ -328,6 +374,7 @@ def main(argv=None):
     p = argparse.ArgumentParser(prog="coin.py", description="One clean card for any coin.")
     p.add_argument("coin", help="BTC, eth, 1000PEPE, kPEPE, SOLUSDT ...")
     p.add_argument("--no-setups", action="store_true", help="skip the setup check")
+    p.add_argument("--no-news", action="store_true", help="skip the headlines and the macro calendar")
     cc.add_common(p)
     a = p.parse_args(argv)
     cc.apply_common(a)
@@ -335,7 +382,7 @@ def main(argv=None):
     venue = cc.get_venue(a.venue)
     if getattr(venue, "auto_notes", None):
         cc.out("Using %s (%s)." % (venue.label, "; ".join(venue.auto_notes)))
-    d = build(venue, a.coin, cfg, with_setups=not a.no_setups)
+    d = build(venue, a.coin, cfg, with_setups=not a.no_setups, with_news=not a.no_news)
     if not a.no_write:
         cc.write_json(cc.wpath("coins", "%s.json" % d["symbol"]), d)
     if a.json:

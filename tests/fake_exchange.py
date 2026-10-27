@@ -13,6 +13,7 @@ cryptocore loads it when CRYPTO_FAKE_EXCHANGE points at this file.
 Failure switches (FAKE_EXCHANGE_MODE, comma separated):
   binance_geoblock  Binance answers HTTP 451 (as it does in the US)
   bybit_geoblock    Bybit answers HTTP 403 from CloudFront
+  hyperliquid_down  Hyperliquid answers HTTP 502 to everything
   flaky             the first call to each path fails with HTTP 503
   ratelimit         the first call to each path answers HTTP 429
   timeout           the first call to each path times out
@@ -1083,6 +1084,8 @@ def handle(method, url, data, headers):
         return 451, {}, json.dumps({"code": 0, "msg": "Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms."})
     if "bybit" in host and "bybit_geoblock" in modes:
         return 403, {}, "<HTML><BODY>The Amazon CloudFront distribution is configured to block access from your country.</BODY></HTML>"
+    if "hyperliquid" in host and "hyperliquid_down" in modes:
+        return 502, {}, "<html><body>502 Bad Gateway</body></html>"
     if first and "flaky" in modes:
         return 503, {}, "Service Unavailable"
     if first and "ratelimit" in modes:

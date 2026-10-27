@@ -38,7 +38,7 @@ BAR = {"orb": M5, "breakout": M15, "trend": M15, "volume": M15, "reversal": HOUR
 TF = {"5m": M5, "15m": M15, "1h": HOUR}
 TF_WORDS = {M5: "5-minute", M15: "15-minute", HOUR: "1-hour"}
 LOOKBACK = {"breakout": 4, "trend": 4, "volume": 4, "reversal": 3, "squeeze": 3}   # bars searched for a recent trigger
-SESSION_NAMES = {"utc": "UTC day", "tokyo": "Tokyo", "london": "London", "ny": "New York"}
+SESSION_NAMES = cc.SESSION_NAMES
 WAKE_DELAY_S = 3.0          # after a bar closes, give the exchange a moment to publish it
 
 _SCAN = []

@@ -29,6 +29,7 @@ import cryptocore as cc  # noqa: E402
 T, O, H, L, C, V, QV = cc.T, cc.O, cc.H, cc.L, cc.C, cc.V, cc.QV
 MIN = 60000
 FRESH_MS = 10 * MIN
+LATE_MS = 60 * 60000                 # a market entry this long after the trigger is a different trade
 
 SETUP_NAMES = {
     "orb": "opening-range breakout", "breakout": "range breakout", "squeeze": "squeeze", "trend": "trend pullback",
@@ -183,6 +184,7 @@ def entry_hit(coin):
 
 def plan_cmd(a, cfg):
     hit, params, venue_name, scanned_at = None, None, None, None
+    watch = None
     if not a.manual:
         e = entry_hit(a.coin)
         if e and (a.venue is None or e.get("venue") == a.venue) and (not a.setup or e["hit"].get("setup") == a.setup):
@@ -201,8 +203,15 @@ def plan_cmd(a, cfg):
     m = venue.market(hit["symbol"] if hit else a.coin)
     side = a.side or (hit["side"] if hit and hit.get("side") in cc.SIDES else None)
     if side is None:
-        raise cc.CryptoError("which side? Add --side long or --side short%s." %
-                             (" (a squeeze has no side until a band breaks)" if hit and hit.get("setup") == "squeeze" else ""))
+        if hit and hit.get("setup") == "squeeze":
+            why = " (a squeeze has no side until a band breaks)"
+        elif a.manual:
+            why = ""
+        elif not watch:
+            why = ", or run /crypto-scanner first to plan from a setup"
+        else:
+            why = " (the last scan has no setup on %s; the stop then comes from the ATR)" % m["coin"]
+        raise cc.CryptoError("which side? Add --side long or --side short%s." % why)
     plan, entry_words = build_plan(venue, m, side, cfg, hit=hit, params=params, scanned_at=scanned_at,
                                    entry=a.entry, stop=a.stop, target=a.target, hold=a.hold)
     if not a.no_write:
@@ -246,6 +255,9 @@ def build_plan(venue, m, side, cfg, hit=None, params=None, scanned_at=None, entr
         if hit and hit.get("trigger"):
             entry_words += " (the trigger was %s at %s)" % (cc.fmt_price(hit["trigger"], m.get("tick")),
                                                            cc.fmt_utc(hit["at"], date=False))
+            if hit.get("at") and now - hit["at"] > LATE_MS:
+                warnings.append("The setup triggered %s ago, so this is a late entry: the setup's record (entries at "
+                                "the trigger) says little about it." % cc.fmt_dur(now - hit["at"]))
     else:
         v = number(spec)
         if not v:
@@ -362,7 +374,7 @@ def print_plan(p, entry_words=None, cfg=None):
         mt = s.get("metrics") or {}
         if s["name"] == "orb":
             sess = (s.get("params") or {}).get("session", "utc")
-            sess = {"utc": "UTC day", "tokyo": "Tokyo", "london": "London", "ny": "New York"}.get(sess, sess)
+            sess = cc.SESSION_NAMES.get(sess, sess)
             line += " (%s open, %s to %s)" % (sess, P(mt.get("or_low")), P(mt.get("or_high")))
         line += ", triggered %s, %s" % (cc.fmt_utc(s["at"], date=False), s.get("status"))
         cc.out("  Setup        " + line)

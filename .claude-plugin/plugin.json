@@ -1,0 +1,25 @@
+{
+  "name": "crypto-trader-skill",
+  "description": "16 Claude skills for crypto day trading on perpetual futures: find what is worth a look today, get any coin's full picture in one card, plan every exit before the entry, replay the trade 10,000 times, and never place an order without your yes.",
+  "version": "1.0.0",
+  "author": {
+    "name": "syedishaq7262-svg",
+    "url": "https://github.com/syedishaq7262-svg"
+  },
+  "homepage": "https://github.com/syedishaq7262-svg/crypto-trader-skill",
+  "repository": "https://github.com/syedishaq7262-svg/crypto-trader-skill",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "claude-skills",
+    "crypto",
+    "day-trading",
+    "perpetual-futures",
+    "binance",
+    "bybit",
+    "hyperliquid",
+    "backtesting",
+    "paper-trading"
+  ],
+  "skills": "./"
+}

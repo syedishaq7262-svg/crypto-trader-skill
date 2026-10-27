@@ -217,8 +217,9 @@ def coin(a, venue, cfg):
     if oi.get("ch7d") is not None:
         oi_line += ", %s in 7 days" % cc.fmt_pct(oi["ch7d"], 1)
     if oi.get("series"):
-        oi_line += "  " + cc.spark(oi["series"], 24)
-    cc.out(oi_line + ".")
+        cc.out(oi_line + ". Last 48h: " + cc.spark(oi["series"], 24))
+    else:
+        cc.out(oi_line + ".")
     if pos.get("long_share") is not None:
         pl = "Positioning  %d%% of accounts long" % round(pos["long_share"] * 100)
         if pos.get("long_share_24h") is not None:

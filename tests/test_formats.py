@@ -108,5 +108,54 @@ class FakeMatchesReal(unittest.TestCase):
         self.assertEqual(set(ctx[0]), set(real_ctx))
 
 
+class RealAccountShapes(unittest.TestCase):
+    """The account parsers (broker, whales) on real recorded account responses."""
+
+    def test_binance_positions(self):
+        from _load import load
+        ex = load("crypto-broker", "exchanges")
+        acct = ex.BinanceAccount("k", "s")
+        acct.call = lambda *a, **k: real("binance_swap_positions.json")
+        p = acct.positions("BTCUSDT")[0]
+        self.assertEqual((p["symbol"], p["side"]), ("BTCUSDT", "long"))
+        self.assertAlmostEqual(p["qty"], 0.009)
+        self.assertAlmostEqual(p["entry"], 67445.9)
+        self.assertAlmostEqual(p["liq"], 64846.78939917)
+        self.assertAlmostEqual(p["margin"], 7.60299749)                       # cross: isolatedMargin is "0"
+
+    def test_bybit_positions_with_a_string_ret_code(self):
+        from _load import load
+        ex = load("crypto-broker", "exchanges")
+        acct = ex.BybitAccount("k", "s")
+        acct._offset = 0
+        raw = real("bybit_swap_positions.json")
+        orig = cc.HTTP.request
+        try:
+            cc.HTTP.request = lambda *a, **k: (200, raw)
+            ps = acct.positions()
+        finally:
+            cc.HTTP.request = orig
+        self.assertTrue(ps)
+        self.assertEqual(ps[0]["symbol"], "TRIAUSDT")
+        self.assertEqual(ps[0]["side"], "short")                                # side "Sell" is a short
+        self.assertAlmostEqual(ps[0]["entry"], 0.01961459)
+
+    def test_hyperliquid_wallet_with_string_numbers(self):
+        from _load import load
+        wh = load("crypto-whales", "whales")
+        orig = wh.info
+        try:
+            wh.info = lambda body, weight=2: real("hyperliquid_clearinghouse.json")
+            with Session() as s:
+                st = wh.wallet_state("0x" + "1" * 40, None, fresh=True)
+        finally:
+            wh.info = orig
+        p = st["positions"][0]
+        self.assertEqual((p["coin"], p["side"], p["margin_mode"]), ("HYPE", "short", "isolated"))
+        self.assertEqual(p["leverage"], 10.0)                                  # "10", a string, in the real answer
+        self.assertAlmostEqual(p["size"], 4.0)
+        self.assertAlmostEqual(st["account"], 76.206517)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -37,7 +37,7 @@ TITLES = {
     "volume": "Volume spike",
     "rs": "Relative strength vs BTC",
 }
-SESSION_NAMES = {"utc": "UTC day", "tokyo": "Tokyo", "london": "London", "ny": "New York"}
+SESSION_NAMES = cc.SESSION_NAMES
 
 
 class Ctx(object):
@@ -198,8 +198,12 @@ def setup_squeeze_break(x, a, sides):
 
 
 def setup_squeeze_any(x, a, sides):
-    """Coiled now (no side yet), or the first close out of a squeeze (a side): what the scan reports."""
-    return setup_squeeze(x, a, sides) + setup_squeeze_break(x, a, sides)
+    """Coiled now (no side yet), or the first close out of a squeeze (a side): what the scan reports.
+    A coin that just broke out is no longer coiled, whichever side the scan asked for."""
+    broke = setup_squeeze_break(x, a, ["long", "short"])
+    if broke:
+        return [h for h in broke if h["side"] in sides]
+    return setup_squeeze(x, a, sides)
 
 
 def setup_trend(x, a, sides):
@@ -368,10 +372,10 @@ def do_universe(a, venue, cfg):
     if a.json:
         cc.dump(data)
         return 0 if kept else 1
-    cc.out("Universe . %s . %s" % (venue.label, cc.fmt_utc(cc.now_ms())))
+    cc.out("Universe | %s | %s" % (venue.label, cc.fmt_utc(cc.now_ms())))
     left = ", ".join("%d %s" % (v, k) for k, v in why.items()) or "nothing"
     cc.out("Kept %d of %d perpetuals (left out: %s)." % (len(kept), len(venue.markets()), left))
-    busiest = " . ".join("%s %s" % (m["coin"], cc.fmt_usd(t["quote_volume"])) for m, t in kept[:10])
+    busiest = ", ".join("%s %s" % (m["coin"], cc.fmt_usd(t["quote_volume"])) for m, t in kept[:10])
     if busiest:
         cc.out("Busiest: " + busiest)
     if not a.no_write:
@@ -392,6 +396,19 @@ def scan(a, venue, cfg):
     return 0 if data["hits"] else 1
 
 
+def fresher_session(session, or_minutes, now):
+    """(name, open ms) of the most recent other session whose opening range has formed, when it opened later."""
+    mine = cc.last_session_open(session, now)
+    best = None
+    for name in cc.SESSIONS:
+        t = cc.last_session_open(name, now)
+        if name == "ny" and cc.utc_dt(t).weekday() >= 5:
+            continue
+        if t > mine and now >= t + (or_minutes + 5) * 60000 and (best is None or t > best[1]):
+            best = (name, t)
+    return best
+
+
 def compute(a, venue, cfg):
     """Run the scan and return the watchlist dict (nothing printed, nothing written)."""
     setups = parse_setups(a.setups)
@@ -409,7 +426,13 @@ def compute(a, venue, cfg):
             setups.remove("orb")
             notes.append("The %d-minute opening range after %s is still forming." % (a.or_minutes, cc.fmt_utc(s_open)))
         elif now > s_open + int(a.entry_hours * 3600000) + 3600000:
-            notes.append("The %s session opened %s ago; opening-range hits may be stale." % (a.session, cc.fmt_dur(now - s_open)))
+            note = "The %s open was %s ago, so its opening-range hits are old." % (SESSION_NAMES.get(a.session, a.session),
+                                                                                  cc.fmt_dur(now - s_open))
+            fresher = fresher_session(a.session, a.or_minutes, now)
+            if fresher:
+                note += " For a fresh range: --session %s (the %s open, %s ago)." % (
+                    fresher[0], SESSION_NAMES[fresher[0]], cc.fmt_dur(now - fresher[1]))
+            notes.append(note)
     universe, why = cc.build_universe(venue, cfg, min_volume=a.min_volume, top=a.top, symbols=a.symbols_list)
     if not universe:
         raise cc.CryptoError("no coins pass the filters (min 24h volume %s). Lower --min-volume or pass --symbols."

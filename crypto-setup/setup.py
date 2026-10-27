@@ -107,6 +107,14 @@ def doctor(a):
         cc.out("  %-24s ok       %s" % ("Work folder", os.path.abspath(wd)))
     except OSError as e:
         cc.out("  %-24s problem  %s" % ("Work folder", e))
+    tz = cc.load_config().get("display_tz") or "UTC"
+    if cc.tz_known(tz):
+        off = cc._tz_offset_minutes(cc.now_ms(), tz)
+        cc.out("  %-24s ok       %s (UTC%s%d%s now)" % ("Display time zone", tz, "+" if off >= 0 else "-", abs(off) // 60,
+                                                      (":%02d" % (abs(off) % 60)) if off % 60 else ""))
+    else:
+        cc.out("  %-24s unknown  %r is not understood here, so times show in UTC. Use an offset such as +11:00." % (
+            "Display time zone", tz))
     cfgp = cc.wpath("config.json")
     cc.out("  %-24s %s" % ("Config", ("ok       " + cfgp) if os.path.exists(cfgp) else
                            "default  no crypto/config.json yet (python3 setup.py init writes one)"))

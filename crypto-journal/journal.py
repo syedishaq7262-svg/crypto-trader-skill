@@ -29,6 +29,11 @@ import cryptocore as cc  # noqa: E402
 
 MIN, HOUR, DAY = 60000, 3600000, 86400000
 REVENGE_MS = 30 * MIN                 # a trade opened this soon after a loss
+BY_HAND = ("manual", "closed", "by hand", "by hand or another order")   # how the broker records a close it did not plan
+EXIT_WORDS = {"manual": "by hand", "closed": "by hand or other", "emergency close: no stop on the exchange": "emergency close"}
+SETUP_WORDS = {"orb": "opening range", "breakout": "range breakout", "squeeze": "squeeze break", "trend": "trend pullback",
+               "reversal": "RSI reversal", "volume": "volume spike", "rs": "rel. strength", "level": "your level",
+               "manual": "own plan"}
 FEW = 20                              # under this many trades a win rate is mostly noise
 GROUP_GAP_MS = 5 * MIN                # Binance realized-profit rows this close together are one close
 
@@ -175,7 +180,7 @@ def discipline(trades, all_events):
     if moves:
         out.append({"flag": "stops_moved", "n": len(moves), "words": "Stops moved %d time%s, always toward the price "
                     "(the broker refuses the other way)." % (len(moves), "" if len(moves) == 1 else "s")})
-    by_hand = [t for t in trades if t.get("reason") in ("by hand", "manual", "by hand or another order")]
+    by_hand = [t for t in trades if t.get("reason") in BY_HAND]
     if by_hand:
         out.append({"flag": "by_hand", "n": len(by_hand), "words": "%d closed by hand before the stop or the target: %s on "
                     "average." % (len(by_hand), ("%+.2fR" % mean([t.get("r") for t in by_hand]))
@@ -200,6 +205,12 @@ def money(x):
     return ("+" if x > 0 else "") + cc.fmt_money(x)
 
 
+def plural_streak(s):
+    if s["streak_wins"]:
+        return "win" if s["streak"] == 1 else "wins"
+    return "loss" if s["streak"] == 1 else "losses"
+
+
 def hour_bucket(t, tz):
     off = cc._tz_offset_minutes(t["opened_at"], tz)
     h = (cc.utc_dt(t["opened_at"]) + cc.timedelta(minutes=off)).hour
@@ -222,7 +233,8 @@ def print_report(trades, since, a):
         s["n"], "" if s["n"] == 1 else "s", s["wins"], s["losses"], round(s["win_rate"] * 100), round(s["win_lo"] * 100),
         round(s["win_hi"] * 100)))
     if s["n"] < FEW:
-        cc.out("  %d trades are too few to judge a win rate or an edge: the range above is how wide the truth could be." % s["n"])
+        cc.out("  %s too few to judge a win rate or an edge: the range above is how wide the truth could be." %
+               ("1 trade is" if s["n"] == 1 else "%d trades are" % s["n"]))
     elif s["n"] < 50:
         cc.out("  Still a small sample: the range is wide.")
     line = "Average %s a trade" % fr(s["avg_r"]) if s["avg_r"] is not None else "Average"
@@ -231,9 +243,13 @@ def print_report(trades, since, a):
         ("%.2f" % s["profit_factor"]) if s["profit_factor"] is not None else "- (no losses)"))
     if s["n_r"] < s["n"]:
         cc.out("  %d imported trade%s have no planned stop, so no R." % (s["n"] - s["n_r"], "" if s["n"] - s["n_r"] == 1 else "s"))
-    cc.out("Average win %s (%s), average loss %s (%s). Best %s %s, worst %s %s." % (
-        fr(s["avg_win_r"]), money(s["avg_win_usd"]), fr(s["avg_loss_r"]), money(s["avg_loss_usd"]),
-        money(s["best"]["pnl_usd"]), s["best"].get("coin", ""), money(s["worst"]["pnl_usd"]), s["worst"].get("coin", "")))
+    wl = ["Average win %s (%s)" % (fr(s["avg_win_r"]), money(s["avg_win_usd"])) if s["wins"] else "No wins yet",
+          ("average loss %s (%s)" % (fr(s["avg_loss_r"]), money(s["avg_loss_usd"]))) if s["losses"] else "no losses yet"]
+    line = ", ".join(wl) + "."
+    if s["n"] > 1:
+        line += " Best %s %s, worst %s %s." % (money(s["best"]["pnl_usd"]), s["best"].get("coin", ""),
+                                               money(s["worst"]["pnl_usd"]), s["worst"].get("coin", ""))
+    cc.out(line)
     if s["avg_win_r"] is not None and s["avg_loss_r"] is not None and s["avg_win_r"] > 0 > s["avg_loss_r"]:
         be = -s["avg_loss_r"] / (s["avg_win_r"] - s["avg_loss_r"])
         s["breakeven"] = be
@@ -243,15 +259,21 @@ def print_report(trades, since, a):
     dd = "Max drawdown %s (-%.1fR)" % (cc.fmt_money(-s["max_dd_usd"]), s["max_dd_r"]) if s["max_dd_usd"] > 0 else "No drawdown"
     if s.get("dd_span"):
         dd += ", %s to %s" % (cc.fmt_local(s["dd_span"][0], date=True).split(" ")[0], cc.fmt_local(s["dd_span"][1]).split(" ")[0])
-    cc.out("%s. Longest losing streak %d; now %d %s in a row." % (dd, s["longest_losing"], s["streak"],
-                                                                 "win" if s["streak_wins"] else "loss"))
+    cc.out("%s. Longest losing streak %d; now %d %s in a row." % (dd, s["longest_losing"], s["streak"], plural_streak(s)))
     if s["fees"] or s["funding"]:
-        cc.out("Costs: fees %s, funding %s%s." % (cc.fmt_money(s["fees"]), cc.fmt_money(s["funding"]),
-                                                 (": %d%% of the profit before costs" % round(s["cost_share"] * 100))
-                                                 if s["cost_share"] is not None else ""))
+        bits = ["fees %s" % cc.fmt_money(s["fees"])]
+        if s["funding"] > 0:
+            bits.append("funding paid %s" % cc.fmt_money(s["funding"]))
+        elif s["funding"] < 0:
+            bits.append("funding received %s" % cc.fmt_money(-s["funding"]))
+        share = ""
+        if s["cost_share"] is not None and s["fees"] + s["funding"] > 0:
+            share = ": %s%d%% of the profit before costs" % ("net " if s["funding"] < 0 else "", round(s["cost_share"] * 100))
+        cc.out("Costs: %s%s." % (", ".join(bits), share))
     cc.out("")
-    for title, key in (("By setup", lambda t: t["setup"]), ("By coin", lambda t: t.get("coin") or "?"),
-                       ("By side", lambda t: t.get("side") or "?"), ("By exit", lambda t: t.get("reason") or "?"),
+    for title, key in (("By setup", lambda t: SETUP_WORDS.get(t["setup"], t["setup"])), ("By coin", lambda t: t.get("coin") or "?"),
+                       ("By side", lambda t: t.get("side") or "?"),
+                       ("By exit", lambda t: EXIT_WORDS.get(t.get("reason"), t.get("reason") or "?")),
                        ("By hour opened (%s)" % tz, lambda t: hour_bucket(t, tz)), ("Paper or live", lambda t: t["source"])):
         rows = breakdown(trades, key)
         if len(rows) < 2 and title not in ("By setup",):
@@ -267,7 +289,7 @@ def print_report(trades, since, a):
             cc.out("  " + ("! " if f["flag"] in ("revenge", "holding_losers") else "  ") + f["words"])
     cc.out("")
     cc.out("Recent trades:")
-    for t in trades[-a.recent:][::-1]:
+    for t in trades[-(a.recent or 8):][::-1]:
         cc.out("  " + trade_line(t))
     cc.out("")
     cc.out("A journal shows what happened, not what happens next. Small samples mislead: read the ranges.")
@@ -276,9 +298,10 @@ def print_report(trades, since, a):
 
 def trade_line(t):
     note = (' "%s"' % "; ".join(t["notes"])[:80]) if t.get("notes") else ""
-    return "%s  %-5s %-5s %-9s %7s %10s  %-15s%s" % (
-        cc.fmt_local(t["at"]).replace(" UTC", ""), t.get("coin", "?"), t.get("side") or "?", t["setup"][:9],
-        fr(t.get("r")), money(t.get("pnl_usd") or 0), (t.get("reason") or "")[:15], note)
+    return ("%s  %-5s %-5s %-14s %7s %10s  %-15s%s" % (
+        cc.fmt_local(t["at"]).replace(" UTC", ""), t.get("coin", "?"), t.get("side") or "?",
+        SETUP_WORDS.get(t["setup"], t["setup"])[:14], fr(t.get("r")), money(t.get("pnl_usd") or 0),
+        EXIT_WORDS.get(t.get("reason"), t.get("reason") or "")[:15], note)).rstrip()
 
 
 # ---------------------------------------------------------------- import
@@ -391,7 +414,7 @@ def build_parser():
     p.add_argument("--live", action="store_true", help="live trades only")
     p.add_argument("--setup", default=None)
     p.add_argument("--coin", default=None)
-    p.add_argument("--recent", type=int, default=8, help="recent trades listed (default 8)")
+    p.add_argument("--recent", type=int, default=None, help="trades listed (default 8 in the report, 20 in trades)")
     p.add_argument("--trade", default=None, help="note: the trade id (default the last closed trade)")
     cc.add_common(p, venue=False)
     return p
@@ -428,8 +451,10 @@ def main(argv=None):
         if not trades:
             cc.out("No closed trades in that window.")
             return 1
-        for t in trades[-max(a.recent, 20):][::-1]:
-            cc.out("%-34s %s" % (t["id"][:34], trade_line(t)))
+        rows = trades[-(a.recent or 20):][::-1]
+        wide = min(34, max(len(t["id"]) for t in rows))
+        for t in rows:
+            cc.out("%-*s  %s" % (wide, t["id"][:wide], trade_line(t)))
         return 0
     if a.json:
         s = stats(trades)

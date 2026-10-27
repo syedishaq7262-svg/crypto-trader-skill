@@ -66,7 +66,33 @@ location, not a fault in the pack. Never suggest a VPN to get around it.
    one day, then edit those keys in `crypto/config.json` for them.
 3. If the clock is more than a second off, tell them: signed live orders are
    refused when the clock drifts. Paper trading does not care.
-4. If nothing answers, say so plainly and stop. Do not retry in a loop.
+4. If the display time zone line says `unknown`, the computer has no time
+   zone database for that name: suggest an offset such as `"+11:00"` in
+   `display_tz` instead.
+5. If nothing answers, say so plainly and stop. Do not retry in a loop.
+
+## Example
+
+From the pack's offline test exchange, with Binance answering as it does
+from a blocked country (the test exchange builds its made-up market on the
+first request, hence the slow answers):
+
+```
+Doctor | 2026-10-21 15:15 UTC | Python 3.13.17 on Linux
+  Binance USD-M futures    blocked  refuses connections from this location
+  Bybit linear perpetuals  ok       28 markets, answered in 1903 ms
+  Hyperliquid perps        ok       27 markets, answered in 1887 ms
+  Fear & Greed index       ok       64 (Greed)
+  News feed (CoinDesk)     ok       answered in 0 ms
+  Macro calendar           ok       answered in 0 ms
+  Bybit announcements      ok       answered in 0 ms
+  Work folder              ok       /home/you/trading/crypto
+  Display time zone        ok       UTC (UTC+0 now)
+  Config                   default  no crypto/config.json yet (python3 setup.py init writes one)
+  Exchange keys            none (fine: every skill except a live crypto-broker works without keys)
+Best venue from here: Bybit linear perpetuals. With "venue": "auto" every skill uses it.
+Blocked here: Binance USD-M futures. That is the exchange's rule for this location, not a fault.
+```
 
 ## Settings worth knowing
 
