@@ -41,9 +41,10 @@ class FromAHit(unittest.TestCase):
             for line in ("Entry", "Stop", "Target", "Risk", "Reward:risk", "Costs", "Funding", "Break-even", "Out by",
                          "A stop is a plan, not a guarantee"):
                 self.assertIn(line, out)
-            self.assertIn("  Backtest     New York opening-range breakout longs: -0.22R a trade after costs over 1,177 trades "
-                          "(Binance, 40 coins, 29 Jul to 27 Oct 2026)", out)
-            self.assertIn("with both checks (the cost rule, a positive 30-day record): -0.01R over 158 (can't be told from zero)", out)
+            self.assertIn("  Backtest     New York opening-range breakout longs: -0.21R a trade after costs over 1,584 trades "
+                          "(Binance, 30 Apr to 27 Oct 2026)", out)
+            self.assertIn("               within the cost rule (a stop-out costs at most 0.2R): -0.06R over 849 (can't be told "
+                          "from zero)", out)
             s.run(*EXIT, ["plan", "SOL", "--side", "long", "--manual", "--venue", "binance"])
             self.assertEqual(EXITM.backtest_lines(plan_of(s)), [])                   # no setup, no record
             p = plan_of(s)

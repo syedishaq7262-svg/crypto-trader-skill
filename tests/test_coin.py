@@ -24,9 +24,9 @@ class Card(unittest.TestCase):
     def test_live_setups_show_their_backtest(self):
         with Session() as s:
             code, out, err = s.run(*COIN, ["SOL", "--venue", "binance"])
-            self.assertIn("Backtest   UTC-day opening-range breakout longs: -0.37R a trade after costs over 1,674 trades; "
-                          "with both checks -0.21R over 117 (can't be told from zero)", out)
-            self.assertIn("(the walk-forward backtest: Binance, 40 coins, 29 Jul to 27 Oct 2026)", out)
+            self.assertIn("Backtest   UTC-day opening-range breakout longs: -0.37R a trade after costs over 2,195 trades; "
+                          "within the cost rule -0.06R over 745 (can't be told from zero)", out)
+            self.assertIn("(the walk-forward backtest: Binance, 30 Apr to 27 Oct 2026)", out)
 
     def test_json_has_what_the_planner_needs(self):
         with Session(config={"session": "ny"}) as s:

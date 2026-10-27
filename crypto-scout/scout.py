@@ -275,7 +275,7 @@ def line_for(i, c):
     if parts:
         words = cc.TRACK_WORDS.get(cc.track_key(c["setup"], c.get("session")), c["setup"])
         out.append("     backtest: %s %ss %s%s" % (words, c["side"], parts[0],
-                                                  ("; with both checks " + parts[1]) if parts[1] else ""))
+                                                  ("; within the cost rule " + parts[1]) if parts[1] else ""))
     out.append("     plan: entry %s, stop %s, target %s (%.1fR), out within %gh; replays: %s" % (
         P(p["entry"]), P(p["stop"]), P(p["target"]), p["target_r"], p["hold_hours"],
         tm["verdict"]["mc"].split(":")[0].lower()))
@@ -408,9 +408,8 @@ def print_board(d):
         cc.out("Nothing has the evidence today: no setup beat random entries on its own coin's last 30 days "
                "clearly enough to survive testing them all at once, with nothing against it. Not trading is a position too.")
     if d.get("backtest_source") and any(cc.track_parts(c["setup"], c["side"], c.get("session")) for c in d["candidates"]):
-        cc.out("Backtest lines: the walk-forward backtest on %s. Both checks: a stop-out costs at most %gR, and the "
-               "setup made money on that coin over its last 30 days." % (d["backtest_source"],
-                                                                         d.get("backtest_cost_limit_r") or 0.2))
+        cc.out("Backtest lines: the walk-forward backtest on %s; within the cost rule, the trades whose stop-out cost "
+               "at most %gR." % (d["backtest_source"], d.get("backtest_cost_limit_r") or 0.2))
     cc.out("Evidence, not a promise or advice. To take one further: scout.py pick N, then /crypto-budget.")
 
 

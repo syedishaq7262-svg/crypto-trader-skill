@@ -89,12 +89,18 @@ with one plain line on a problem.
    at a stop-out (only when the cost rule is off), thin 24-hour volume,
    reward:risk under the minimum.
 7. **The backtest line.** The setup and side's record in the pack's
-   walk-forward backtest across 40 coins: its average a trade after costs,
-   and its average over the trades that passed both checks (the cost rule,
-   and a positive 30-day record on that coin). "Can't be told from zero"
-   means the range around the average, widened for testing 14
-   setup-and-side groups at once, spans zero. It is context: the board still
-   ranks by the setup's own coin.
+   walk-forward backtests (two 90-day runs): its average a trade after
+   costs, and its average over the trades within the cost rule, the ones the
+   pack lets you take. "Can't be told from zero" means the range around the
+   average, widened for testing 14 setup-and-side groups at once, spans
+   zero. It is context: the board still ranks by the setup's own coin.
+
+**How far to trust the board.** In the first backtest, keeping only setups
+whose own last 30 days on that coin made money cut the losses; on the 90
+days before, which that run never saw, it did not. A coin's recent record
+with a setup is not a reliable guide to its next trade, so read the board as
+what each rule did on each coin lately, never as a forecast, and say so
+when the user leans on it.
 
 | tier | what it means |
 | --- | --- |
@@ -145,22 +151,22 @@ Left out, stops too tight for the costs (fees and slippage over 0.2R at a stop-o
 Worth watching (positive, not proven) (5)
  1. VOLX long, volume spike (spike 15:15 UTC)
      history +1.96R a trade over 3 trades, target first 3 of 3; random entries +0.00R; luck matches it 0.2% of the time (still clear after testing 10 setups at once)
-     backtest: volume spike longs -0.02R a trade after costs over 3,226 trades (can't be told from zero); with both checks +0.08R over 840 (can't be told from zero)
+     backtest: volume spike longs -0.05R a trade after costs over 4,494 trades (can't be told from zero); within the cost rule +0.03R over 3,215 (can't be told from zero)
      plan: entry 0.68892, stop 0.66998, target 0.72680 (2.0R), out within 24h; replays: leans toward the stop
  4. TRDX long, trend pullback (reclaimed 15:15 UTC)
      history +0.63R a trade over 45 trades, target first 26 of 41; random entries +0.53R; luck matches it 33% of the time
-     backtest: trend pullback longs -0.10R a trade after costs over 3,568 trades; with both checks -0.03R over 872 (can't be told from zero)
+     backtest: trend pullback longs -0.12R a trade after costs over 4,650 trades; within the cost rule -0.01R over 3,248 (can't be told from zero)
      plan: entry 76.274, stop 75.223, target 78.376 (2.0R), out within 24h; replays: mostly out of time
 
 No edge on this coin lately (5)
  7. ETH short, squeeze break (broke down 15:00 UTC)
      history -0.07R a trade over 3 trades, target first 1 of 3; random entries -0.30R; luck matches it 42% of the time
-     backtest: squeeze break shorts -0.17R a trade after costs over 668 trades; with both checks +0.33R over 95 (can't be told from zero)
+     backtest: squeeze break shorts -0.16R a trade after costs over 892 trades; within the cost rule -0.06R over 667 (can't be told from zero)
      plan: entry 3,435.04, stop 3,476.50, target 3,352.12 (2.0R), out within 24h; replays: leans toward the stop
      note: a short in a Risk-on market
 
 Nothing has the evidence today: no setup beat random entries on its own coin's last 30 days clearly enough to survive testing them all at once, with nothing against it. Not trading is a position too.
-Backtest lines: the walk-forward backtest on Binance, 40 coins, 29 Jul to 27 Oct 2026. Both checks: a stop-out costs at most 0.2R, and the setup made money on that coin over its last 30 days.
+Backtest lines: the walk-forward backtest on Binance, 30 Apr to 27 Oct 2026; within the cost rule, the trades whose stop-out cost at most 0.2R.
 Evidence, not a promise or advice. To take one further: scout.py pick N, then /crypto-budget.
 ```
 
@@ -168,9 +174,9 @@ VOLX's three past trades all won, and random entries rarely do that, but
 three trades is not a record. TRDX made +0.63R a trade over 45 trades, yet
 random long entries on TRDX made +0.53R: the setup added little to what
 simply being long earned. Both are worth watching, and neither is evidence.
-The backtest lines say the same from further away: across 40 coins and 90
-days, volume-spike longs came out about even and trend-pullback longs lost
-0.10R a trade. BONK's breakout short is left out: its stop is so close that
+The backtest lines say the same from further away: over 180 days,
+volume-spike longs lost 0.05R a trade, too little to tell from zero, and
+trend-pullback longs lost 0.12R. BONK's breakout short is left out: its stop is so close that
 fees and slippage would take half the risk at a stop-out.
 
 ## Rules

@@ -65,9 +65,10 @@ class Board(unittest.TestCase):
                 c = x["plan"]["costs"]
                 self.assertLessEqual(round(c["entry_r"] + c["stop_exit_r"], 2), 0.2)
                 self.assertIn("backtest: ", "\n".join(SC.line_for(x["rank"], x)))
-            self.assertIn("     backtest: range breakout shorts -0.24R a trade after costs over 2,557 trades; with both "
-                          "checks +0.06R over 339 (can't be told from zero)", out)
-            self.assertIn("Backtest lines: the walk-forward backtest on Binance, 40 coins, 29 Jul to 27 Oct 2026.", out)
+            self.assertIn("     backtest: range breakout shorts -0.23R a trade after costs over 3,534 trades; within the cost "
+                          "rule -0.18R over 2,127\n", out)
+            self.assertIn("Backtest lines: the walk-forward backtest on Binance, 30 Apr to 27 Oct 2026; within the cost rule, "
+                          "the trades whose stop-out cost at most 0.2R.", out)
         with Session(config={"max_cost_r": 0}) as s:                # the rule off: tested, with a note
             code, out, err = s.run(*SCOUT, FAST)
             self.assertNotIn("too tight for the costs", out)

@@ -105,12 +105,12 @@ crypto-exit, not a stop order.
 **Stop cost.** Every hit with a stop shows what fees and slippage would take
 from a stop-out, in R, entering at the trigger, with slippage read from that
 coin's order book. `over` marks one past `max_cost_r` (0.2R): crypto-risk
-would block it. In the pack's backtest such trades broke about even before
-costs and lost 0.38R a trade after them.
+would block it. In the pack's backtests such trades broke about even before
+costs and lost 0.35R a trade after them.
 
 **Backtest.** Each setup's title carries its average trade after costs in
-the walk-forward backtest that ships with the pack (Binance, 40 coins, 90
-days; see the README), longs and shorts apart. It is the setup's long-run
+the walk-forward backtests that ship with the pack (Binance, two 90-day
+runs, 30 Apr to 27 Oct 2026; see the README), longs and shorts apart. It is the setup's long-run
 record, not a judgment of today's hit.
 
 ## Steps
@@ -137,7 +137,7 @@ New York open, shortened:
 Scan | Binance USD-M futures | 2026-10-21 15:15 UTC
 26 coins scanned (left out: 1 stablecoin, 1 listed recently, 1 low volume). Closed bars only; the newest 5m bar closed at 15:15 UTC.
 
-Opening-range breakout | New York open at 13:30 UTC | 30-minute range | backtest: longs -0.22R, shorts -0.16R a trade after costs
+Opening-range breakout | New York open at 13:30 UTC | 30-minute range | backtest: longs -0.21R, shorts -0.14R a trade after costs
 coin  side   range                   trigger (5m close)       now  rvol   stop cost  status
 APT   short  12.378 to 12.564        12.342 @ 14:50 UTC    12.261  4.9x       0.20R  holding
 ORBX  long   21.002 to 21.255        21.404 @ 14:20 UTC    21.456  4.8x       0.13R  holding
@@ -145,20 +145,20 @@ ADA   short  0.46017 to 0.46335     0.45902 @ 14:05 UTC   0.45662  4.6x  0.22R o
   ... 4 more in crypto/watchlist.json
   Broke out, then fell back inside: INJ long, OP short, ARB short, APT long, SQZX short
 
-Range breakout | backtest: longs -0.10R, shorts -0.24R a trade after costs
+Range breakout | backtest: longs -0.10R, shorts -0.23R a trade after costs
 coin  side     level  15m close  beyond  rvol   stop cost  status
 BRKX  long    2.9210     2.9623  +1.41%  3.5x       0.07R  fresh
 BRKD  short   13.052     12.871  +1.39%  3.5x       0.10R  fresh
 BONK  short  0.02550    0.02543  +0.25%  1.8x  0.52R over  fresh
 
-Squeeze (volatility compression) | backtest of the break: longs +0.01R, shorts -0.17R a trade after costs
+Squeeze (volatility compression) | backtest of the break: longs +0.00R, shorts -0.16R a trade after costs
 coin   band width  rank (30d)  lower band  upper band
 FUNDX       1.66%          0%      30.044      30.547
   Broke out of a squeeze (first 1h close outside the bands):
 coin   side               1h close      band  middle band   stop cost
 ETH    short  3,444.24 @ 15:00 UTC  3,444.42     3,476.50       0.12R
 
-Volume spike | backtest: longs -0.02R, shorts -0.20R a trade after costs
+Volume spike | backtest: longs -0.05R, shorts -0.17R a trade after costs
 coin  side  15m close    move  rvol     size  stop cost
 VOLX  long    0.68892  +2.62%  8.7x  3.3 ATR      0.04R
 
@@ -168,7 +168,7 @@ SOL   laggard  -7.54%   -0.85%  1.25       -6.48%
 LINK  leader   +7.76%   -0.85%  1.07       +8.66%
 
 Stop cost: what fees and slippage take from a stop-out when entering at the trigger, in R. Over 0.2R (max_cost_r) crypto-risk blocks the trade.
-Backtest: each setup's average trade after costs in the walk-forward backtest (Binance, 40 coins, 29 Jul to 27 Oct 2026).
+Backtest: each setup's average trade after costs in the walk-forward backtest (Binance, 30 Apr to 27 Oct 2026).
 44 hits across 25 coins. A scan lists charts that match a rule; it is not a list of coins to buy.
 Next: /crypto-coin <coin> for the full picture, /crypto-exit to set the stop and target.
 ```
@@ -178,7 +178,7 @@ breakout is holding. Both happened, so both are listed. ADA's short and
 BONK's breakout have stops so close that fees and slippage would take more
 than 0.2R at a stop-out, so crypto-risk would block them. Each setup's title
 carries its record in the pack's walk-forward backtest: the New York
-opening range lost 0.22R a trade on longs and 0.16R on shorts, after costs.
+opening range lost 0.21R a trade on longs and 0.14R on shorts, after costs.
 
 ## Rules
 

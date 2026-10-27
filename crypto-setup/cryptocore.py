@@ -38,7 +38,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 USER_AGENT = "crypto-trader-skill/%s (+https://github.com/crypto-trader-skill)" % VERSION
 
 
@@ -2102,13 +2102,17 @@ def track_entry(setup, side, session=None):
 
 
 def track_source(tr=None):
-    """Where the track record comes from, in a few words: "Binance, 40 coins, 29 Jul to 27 Oct 2026"."""
+    """Where the track record comes from, in a few words: "Binance, 40 coins, 29 Jul to 27 Oct 2026", or for runs
+    pooled over different coin lists "Binance, 30 Apr to 27 Oct 2026"."""
     tr = tr or track_record()
     if not tr:
         return ""
     a, b = utc_dt(tr["from"]), utc_dt(tr["to"])
     span = "%d %s to %d %s %d" % (a.day, a.strftime("%b"), b.day, b.strftime("%b"), b.year)
-    return "%s, %d coins, %s" % ((tr.get("venue_label") or tr.get("venue") or "").split(" ")[0], tr.get("coins") or 0, span)
+    venue = (tr.get("venue_label") or tr.get("venue") or "").split(" ")[0]
+    if len(tr.get("runs") or []) > 1:
+        return "%s, %s" % (venue, span)
+    return "%s, %d coins, %s" % (venue, tr.get("coins") or 0, span)
 
 
 def zero_note(e):
@@ -2118,14 +2122,15 @@ def zero_note(e):
 
 
 def track_parts(setup, side, session=None):
-    """('-0.10R a trade after costs over 3,393 trades', '+0.02R over 742 (can't be told from zero)'), the second
-    None when nothing was judged; or None when the backtest has no record of this setup and side."""
+    """('-0.11R a trade after costs over 4,453 trades', '-0.00R over 2,992 (can't be told from zero)'): every trade,
+    then the ones the cost rule lets through (the second None when the record has no such figure); or None when
+    the backtest has no record of this setup and side."""
     e = track_entry(setup, side, session)
     if not e or not e.get("n"):
         return None
     raw = "%+.2fR a trade after costs over %s trade%s%s" % (e["avg_r"], "{:,}".format(e["n"]), "" if e["n"] == 1 else "s",
                                                              zero_note(e))
-    c = e.get("checked")
+    c = e.get("cost_rule")
     if not c:
         return raw, None
     if not c.get("n"):
@@ -2134,11 +2139,11 @@ def track_parts(setup, side, session=None):
 
 
 def track_words(setup, side, session=None):
-    """'-0.10R a trade after costs over 3,393 trades; with both checks +0.02R over 742', or None."""
+    """'-0.11R a trade after costs over 4,453 trades; within the cost rule -0.00R over 2,992', or None."""
     parts = track_parts(setup, side, session)
     if not parts:
         return None
-    return parts[0] + (("; with both checks " + parts[1]) if parts[1] else "")
+    return parts[0] + (("; within the cost rule " + parts[1]) if parts[1] else "")
 
 
 # Maintenance margin. Bybit and Hyperliquid publish theirs; Binance's brackets need a key,

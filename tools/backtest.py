@@ -269,7 +269,8 @@ def cost_split(trades, limit):
 
 def paper_account(trades, cfg, rank=None, tie=None, day_start_ms=0):
     """A $1,000 paper account taking signals in time order under the pack's default limits: $10 at risk a trade,
-    at most 2 open and 4 new a day, never two on one coin, a pause after 2 losses in a row, $30 a day of losses.
+    at most 2 open and 4 new a day, never two on one coin, a pause after 2 losses in a row, $30 a day of losses,
+    and no new trade once the account cannot cover one trade's risk.
     Signals at the same moment go by `tie` (a number per trade's id) when given, else by `rank` (busiest first).
     The trading day starts `day_start_ms` after midnight UTC, as it does at midnight in the user's time zone."""
     rank = rank or {}
@@ -305,7 +306,7 @@ def paper_account(trades, cfg, rank=None, tie=None, day_start_ms=0):
                 still.append(p)
         open_pos = still
         d = (t["at"] - day_start_ms) // DAY
-        if (t["at"] < paused_until or len(open_pos) >= max_open or day_count.get(d, 0) >= per_day
+        if (balance < risk or t["at"] < paused_until or len(open_pos) >= max_open or day_count.get(d, 0) >= per_day
                 or any(p["coin"] == t["coin"] for p in open_pos)
                 or day_loss.get(d, 0.0) + risk * (len(open_pos) + 1) > daily):
             continue
@@ -390,16 +391,16 @@ def z_for(groups, alpha=0.10):
 
 
 def track_record(d, groups):
-    """Each setup and side's record, raw and with both checks: what the Scout, the Scanner, the Coin Report and
-    the Exit Planner show next to a live setup. lo and hi are the average's range widened for testing every
-    setup and side at once, so "can't be told from zero" means what it says."""
-    by, both, judged = {}, {}, {}
+    """Each setup and side's record: every trade, and the trades the cost rule lets through, which are the ones
+    the pack lets you take. The Scout, the Scanner, the Coin Report and the Exit Planner show it next to a live
+    setup. lo and hi are the average's range widened for testing every setup and side at once, so "can't be
+    told from zero" means what it says. (The 30-day check is not in it: it helped in one 90-day window and not
+    in the next.)"""
+    by, passed = {}, {}
     for t in d["trades"]:
         by.setdefault((t["setup"], t["side"]), []).append(t)
-    for t in groups["both"]:
-        both.setdefault((t["setup"], t["side"]), []).append(t)
-    for t in groups["every"]:
-        judged.setdefault((t["setup"], t["side"]), []).append(t)
+        if not cc.over_cost_limit(t["stop_cost_r"], d["cost_limit_r"]):
+            passed.setdefault((t["setup"], t["side"]), []).append(t)
     r4 = lambda x: None if x is None else round(x, 4)
     z = z_for(len(d["by_setup"]))
 
@@ -415,11 +416,11 @@ def track_record(d, groups):
         e.update({"avg_gross_r": r4(row["avg_gross_r"]), "win_rate": r4(row["win_rate"])})
         if row.get("random_r") is not None:
             e["random_r"] = r4(row["random_r"])
-        e["checked"] = ranged(summary(both.get(k) or []))
-        e["checked"]["of"] = len(judged.get(k) or [])
+        e["cost_rule"] = ranged(summary(passed.get(k) or []))
         setups["%s|%s" % k] = e
     ch = d["checks"]
-    return {"version": 1, "made_by": "tools/backtest.py", "source": d.get("source"), "venue": d["venue"],
+    return {"version": 2, "made_by": "tools/backtest.py", "source": d.get("source"), "runs": d.get("runs"),
+            "venue": d["venue"],
             "venue_label": d["venue_label"], "coins": d["coins"], "from": d["from"], "to": d["to"],
             "from_utc": cc.fmt_utc(d["from"]), "to_utc": cc.fmt_utc(d["to"]), "days": d["days"],
             "target_r": d["target_r"], "hold_hours": d["hold_hours"], "code": d["code"],
@@ -446,7 +447,7 @@ def rr(x):
 
 
 def usd(x):
-    return "-" if x is None else "$" + "{:,.0f}".format(x)
+    return "-" if x is None else ("-" if x < 0 else "") + "$" + "{:,.0f}".format(abs(x))
 
 
 def count(n):
@@ -459,6 +460,10 @@ def report_lines(d):
     out.append("Backtest | %s | %d coins | %s to %s | %s" % (
         d["venue_label"], d["coins"], cc.fmt_utc(d["from"]), cc.fmt_utc(d["to"]),
         ("crypto-trader-skill " + d["code"]) if not d.get("source") else "trades re-read from " + d["source"]))
+    for r in (d.get("runs") or [])[:9] if len(d.get("runs") or []) > 1 else []:
+        out.append("  pooled: %s, %d coins, signals %s to %s, %s trades%s" % (
+            r["source"], r["coins"], r["first_signal_utc"], r["last_signal_utc"], count(r["trades"]),
+            ", stop-out costs rebuilt" if r["costs_estimated"] else ""))
     out.append("Walk-forward: the scanner's own rules saw only the candles closed at each moment; each trade was")
     out.append("planned like /crypto-exit (the setup's stop, %gR target, out after %gh) and played on the candles that came"
                % (d["target_r"], d["hold_hours"]))
@@ -504,7 +509,8 @@ def report_lines(d):
         out.append("at the time:")
         out.append("  cost rule      a stop-out costs at most %s (fees and slippage, known before the entry)%s" % (
             ("%gR" % lim) if lim else "-, the rule is off",
-            "" if not d["costs_estimated"] else "; rebuilt from each coin's stop-outs, as this file has no cost column"))
+            "" if not d["costs_estimated"] else "; for trades from a file with no cost column, rebuilt from each coin's "
+                                                "stop-outs"))
         out.append("  30-day check   the same coin, setup and side made money after costs over its last %d days, at least %d trades"
                    % (EVIDENCE_DAYS, EVIDENCE_MIN_TRADES))
         out.append("A rule that helps in only one half of the stretch is the market's mood, not a rule. The halves split at %s."
@@ -639,23 +645,36 @@ def download_and_replay(a, cfg):
 
 
 def reread(a, cfg):
-    """(trades, no setup results, the window and the venue) from an earlier run's trades file."""
+    """(trades, no setup results, the window and the venue) from earlier runs' trades files. One file: the window
+    is --days up to --end. Several, separated by commas: their trades pooled, from the earliest file's first
+    signal to --end (or the last signal), each file's costs rebuilt on its own if it has no cost column."""
     t0 = time.time()
-    trades, estimated = read_trades(a.trades)
-    if not trades:
-        raise cc.CryptoError("%s has no trades" % a.trades)
-    last = max(t["at"] for t in trades)
-    end = window_end(a, ((last + cc.HOUR_MS - 1) // cc.HOUR_MS) * cc.HOUR_MS)
+    files = [f.strip() for f in a.trades.split(",") if f.strip()]
+    hour = lambda ms, up=False: ((ms + (cc.HOUR_MS - 1 if up else 0)) // cc.HOUR_MS) * cc.HOUR_MS
+    trades, estimated, runs = [], False, []
+    for f in files:
+        ts, est = read_trades(f)
+        if not ts:
+            raise cc.CryptoError("%s has no trades" % f)
+        trades.extend(ts)
+        estimated = estimated or est
+        runs.append({"source": os.path.basename(f), "trades": len(ts), "coins": len(set(t["coin"] for t in ts)),
+                     "first_signal_utc": cc.fmt_utc(min(t["at"] for t in ts)),
+                     "last_signal_utc": cc.fmt_utc(max(t["at"] for t in ts)), "costs_estimated": est})
+    runs.sort(key=lambda r: r["first_signal_utc"])                  # the same pool whatever order the files came in
+    trades.sort(key=lambda t: (t["at"], t["coin"], t["setup"], t["side"]))
+    end = window_end(a, hour(max(t["at"] for t in trades), up=True))
+    start = end - int(a.days * DAY) if len(files) == 1 else hour(min(t["at"] for t in trades))
     name = a.venue if a.venue and a.venue != "auto" else next(
-        (v for v in ("binance", "bybit") if v in os.path.basename(a.trades).lower()), None)
+        (v for v in ("binance", "bybit") if all(v in os.path.basename(f).lower() for f in files)), None)
     if not name:
         raise cc.CryptoError("which exchange are these trades from? Pass --venue binance or --venue bybit")
     venue = cc.get_venue(name)
     meta = {"venue": venue.name, "venue_label": venue.label,
-            "coins": len(set(t["coin"] for t in trades)), "from": end - int(a.days * DAY), "to": end,
-            "hold_hours": cc.parse_hold(a.hold, 24.0), "code": None, "source": os.path.basename(a.trades),
-            "left_out": [], "t0": t0, "costs_estimated": estimated}
-    return [t for t in trades if meta["from"] <= t["at"] < end], [], meta
+            "coins": len(set(t["coin"] for t in trades)), "from": start, "to": end, "days": (end - start) / float(DAY),
+            "hold_hours": cc.parse_hold(a.hold, 24.0), "code": None, "source": ", ".join(r["source"] for r in runs),
+            "runs": runs, "left_out": [], "t0": t0, "costs_estimated": estimated}
+    return [t for t in trades if start <= t["at"] < end], [], meta
 
 
 def main(argv=None):
@@ -672,8 +691,9 @@ def main(argv=None):
     p.add_argument("--workers", type=int, default=0, help="processes for the replay (default: your CPU count, up to 8)")
     p.add_argument("--random-per-trade", type=int, default=10, help="random entries per trade for the luck test")
     p.add_argument("--cache", default=None, metavar="DIR", help="keep downloaded candles in DIR and reuse them")
-    p.add_argument("--trades", default=None, metavar="FILE",
-                   help="re-read an earlier run's backtest_trades.csv (or .csv.gz) instead of downloading")
+    p.add_argument("--trades", default=None, metavar="FILE[,FILE]",
+                   help="re-read earlier runs' backtest_trades.csv (or .csv.gz) instead of downloading; several, "
+                        "separated by commas, are pooled")
     p.add_argument("--out", default=".", metavar="DIR", help="where to write the report, the trades and the numbers")
     p.add_argument("--seed", type=int, default=19)
     cc.add_common(p)
@@ -692,8 +712,9 @@ def main(argv=None):
     rows, baseline = setup_rows(trades, results)
     groups = check_groups(trades, meta["from"], limit)
     d = {"version": 2, "venue": meta["venue"], "venue_label": meta["venue_label"], "coins": meta["coins"],
-         "from": meta["from"], "to": meta["to"], "days": a.days, "target_r": a.target_r, "hold_hours": meta["hold_hours"],
-         "code": meta["code"], "source": meta["source"], "cost_limit_r": limit,
+         "from": meta["from"], "to": meta["to"], "days": meta.get("days", a.days), "target_r": a.target_r,
+         "hold_hours": meta["hold_hours"], "code": meta["code"], "source": meta["source"], "runs": meta.get("runs"),
+         "cost_limit_r": limit,
          "costs_estimated": bool(meta.get("costs_estimated")),
          "all": summary(trades), "by_setup": rows, "baseline": baseline,
          "checks": check_table(groups, meta["from"], meta["to"]), "cost_split": cost_split(trades, limit),

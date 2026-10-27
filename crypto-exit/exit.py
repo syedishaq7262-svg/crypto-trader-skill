@@ -432,7 +432,8 @@ def backtest_lines(p):
     words = cc.TRACK_WORDS.get(cc.track_key(s["name"], session), s["name"])
     out = ["%s %ss: %s (%s)" % (words, p["side"], parts[0], cc.track_source())]
     if parts[1]:
-        out.append("with both checks (the cost rule, a positive 30-day record): %s" % parts[1])
+        out.append("within the cost rule (a stop-out costs at most %gR): %s"
+                   % ((cc.track_record() or {}).get("cost_limit_r") or 0.2, parts[1]))
     return out
 
 

@@ -18,10 +18,11 @@ planned trade 10,000 times from the coin's own recent candles, re-runs the
 same setup on its last 30 days, and tests it against random entries before
 you risk a dollar.
 
-Every setup with a stop was also backtested walk-forward: 27,566 trades over
-90 days of real Binance prices, with fake money. The results are
-[below](#backtest-27566-trades-on-real-past-prices), losses included, and
-the pack now shows each setup's record wherever it shows the setup.
+Every setup with a stop was also backtested walk-forward on real Binance
+prices with fake money: 27,566 trades over 90 days, then 9,835 more over
+the 90 days before, as a check on data the first run never saw. The results
+are [below](#backtest-27566-trades-on-real-past-prices), losses included,
+and the pack shows each setup's record wherever it shows the setup.
 
 No trade goes through until you say yes. Nothing in this pack can place an
 order on its own. Paper trading is the default, and it is not a testnet: it
@@ -197,7 +198,8 @@ What it says:
 ### What the trades taught us
 
 We split the trades in two by time and kept only the lessons that held in
-both halves. Two rules did, and both were in the pack before the backtest:
+both halves. In this first run two rules did, and both were in the pack
+before the backtest:
 the cost rule (skip a trade when fees and slippage would take more than
 0.2R from a stop-out; the Exit Planner already warned at that line) and the
 30-day check (take a setup only when it made money after costs on that coin
@@ -213,8 +215,8 @@ trades.
 | both | +0.00R | +0.02R | 4,314 |
 
 The 30-day check needs 30 days of history, so the table covers the last 60
-of the 90 days. Together the two rules come out about even: they cut the
-losses; they do not make money.
+of the 90 days. In this run the two rules together came out about even:
+they cut the losses; they did not make money.
 
 What did not hold, worked out from the same trades: longs did better in one
 month and shorts in the other, which is the market's mood, not a rule;
@@ -236,6 +238,34 @@ hour, as a trader's day starts at midnight wherever they live:
 | the 30-day check | $848 | $549 to $1,155 | 79 |
 | both | $951 | $689 to $1,183 | 65 |
 
+### Then 90 days it had never seen
+
+A lesson read from one stretch of data can be luck, so we ran the same code
+on the 90 days before, 30 April to 29 July 2026. Only 14 of today's 40
+busiest coins traded through all of it: 9,835 trades, in
+[the second report](backtest/2026-07-29-binance-90d-report.txt).
+
+| average a trade, after costs | 30 May to 29 Jun | 29 Jun to 29 Jul | trades |
+| --- | --- | --- | --- |
+| every signal | -0.10R | -0.24R | 6,548 |
+| the cost rule | -0.05R | -0.15R | 4,104 |
+| the 30-day check | -0.08R | -0.35R | 2,048 |
+| both | -0.06R | -0.30R | 1,493 |
+
+- **The setups lost money again:** -0.15R a trade after costs, +0.04R
+  before, and again a little better than random entries (+0.08R). No setup
+  and side made money after costs.
+- **The cost rule held.** It beat taking every signal in both halves, and
+  over the 90 days the trades it would have refused lost 0.26R a trade,
+  against 0.08R for the rest.
+- **The 30-day check did not.** It did no better than taking every signal
+  overall and worse in the second half, and with it the two rules together
+  lost 0.14R a trade. On the same 14 coins it had helped from August to
+  October, so the coins are not the reason: a setup's last 30 days on a coin
+  is not a reliable guide to its next trade. The Scout ranks by that record,
+  so read its board as what each rule did on each coin lately, not as a
+  forecast.
+
 What the pack does with it:
 
 - **The cost rule is now a rule.** The Risk Manager blocks an order when
@@ -244,35 +274,39 @@ What the pack does with it:
   pass, the Scout leaves those setups out and tests the next one in their
   place, and the Scanner marks them.
 - **Every setup shows its record.** The Scout, the Scanner, the Coin Report
-  and the Exit Planner show the setup's result in this backtest next to it,
-  with and without both checks, and say "can't be told from zero" when the
-  range around a result, widened for testing 14 setup-and-side groups at
-  once, spans zero. The numbers ship in
+  and the Exit Planner show the setup's record next to it, from both runs
+  pooled (37,401 trades): every trade, and the trades within the cost rule,
+  which are the ones the pack lets you take. They say "can't be told from
+  zero" when the range around a result, widened for testing 14
+  setup-and-side groups at once, spans zero. The numbers ship in
   [`crypto-setup/track_record.json`](crypto-setup/track_record.json); your
   own run's `track_record.json`, copied into your `crypto/` folder, takes
   its place.
-- The Scout still tests each setup on its own coin and says "nothing today"
-  when nothing qualifies, the Risk Manager caps the damage, and paper
-  trading is the default.
+- The Scout still ranks setups by their own coin's last 30 days; after the
+  second run, take that as context, not as evidence of an edge. It says
+  "nothing today" when nothing qualifies, the Risk Manager caps the damage,
+  and paper trading is the default.
 
 Caveats: the coins are today's busiest, so coins that faded or were delisted
-are missing; past trades were charged today's fees and slippage; 90 days is
-one stretch of one market. The published run came before each trade's
-stop-out cost was saved, so the cost rule's numbers here rebuild it from
-each coin's own stop-outs; runs from this version save it exactly. Every
-trade, the original report and the checks report are in
-[backtest/](backtest/), and you can run it yourself on Binance or Bybit,
-over any window (Hyperliquid keeps too little 5-minute history):
+are missing (the second run kept only 14); past trades were charged today's
+fees and slippage; two 90-day stretches are still a short history. The
+first run came before each trade's stop-out cost was saved, so its cost-rule
+numbers rebuild that cost from each coin's own stop-outs; the second run
+saved it exactly. Both runs' trades and reports, the first run's checks
+report and the pooled report are in [backtest/](backtest/), and you can run
+it yourself on Binance or Bybit, over any window (Hyperliquid keeps too
+little 5-minute history):
 
 ```bash
 python3 tools/backtest.py                        # the 40 busiest coins, the last 90 days
 python3 tools/backtest.py --end 2026-07-29       # the 90 days before 29 July
 python3 tools/backtest.py --coins 20 --days 60 --venue bybit
-python3 tools/backtest.py --trades backtest/2026-10-27-binance-90d-trades.csv.gz --venue binance --end "2026-10-27 06:00"
+python3 tools/backtest.py --trades backtest/2026-07-29-binance-90d-trades.csv.gz,backtest/2026-10-27-binance-90d-trades.csv.gz --end "2026-10-27 06:00"
 ```
 
-The last one rebuilds the checks report and the track record from the
-published trades, without downloading anything.
+The last one pools both published runs into the track record that ships
+with the pack, without downloading anything. With one file and that run's
+`--end`, it rebuilds that run's checks.
 
 ## The tools
 
@@ -432,7 +466,7 @@ crypto-broker/       SKILL.md, broker.py, exchanges.py
 crypto-alerts/       SKILL.md, alerts.py
 crypto-journal/      SKILL.md, journal.py
 tools/               live_check.py: every skill against the real exchanges; backtest.py: the walk-forward backtest
-backtest/            the published backtest: the report, the checks report and every trade (CSV, gzipped)
+backtest/            the published backtests: both runs' reports and trades (CSV, gzipped), the checks and pooled reports
 tests/               unittest suite, a fake exchange, real recorded responses
 ```
 

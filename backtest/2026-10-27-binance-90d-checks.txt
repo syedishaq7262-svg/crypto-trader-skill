@@ -29,7 +29,7 @@ volume spike             short   3,572  34%  -0.20R        -0.05R    -720R      
 
 The pack's two checks, on the 18,462 trades after the first 30 days, each judged with only what was known
 at the time:
-  cost rule      a stop-out costs at most 0.2R (fees and slippage, known before the entry); rebuilt from each coin's stop-outs, as this file has no cost column
+  cost rule      a stop-out costs at most 0.2R (fees and slippage, known before the entry); for trades from a file with no cost column, rebuilt from each coin's stop-outs
   30-day check   the same coin, setup and side made money after costs over its last 30 days, at least 5 trades
 A rule that helps in only one half of the stretch is the market's mood, not a rule. The halves split at 2026-09-27 06:00 UTC.
                 trades  first half  second half     all  won

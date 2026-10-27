@@ -193,28 +193,47 @@ class EndToEnd(unittest.TestCase):
             shutil.rmtree(out, ignore_errors=True)
 
 
-PUBLISHED = os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-trades.csv.gz")
+BACKTEST = os.path.join(ROOT, "backtest")
+FIRST = os.path.join(BACKTEST, "2026-10-27-binance-90d-trades.csv.gz")     # 29 Jul to 27 Oct, 40 coins
+SECOND = os.path.join(BACKTEST, "2026-07-29-binance-90d-trades.csv.gz")    # 30 Apr to 29 Jul, 14 coins, out of sample
 
 
 class Published(unittest.TestCase):
-    """The checks report and the track record that ship with the pack are what the tool makes of the published trades."""
+    """Every published report, and the track record that ships with the pack, is what the tool makes of the
+    published trades."""
+
+    def rebuild(self, s, trades, end, out):
+        code, text, err = s.run("tools", "backtest", ["--trades", trades, "--venue", "binance", "--end", end, "--out", out])
+        self.assertEqual(code, 0, err)
+        with open(os.path.join(out, "backtest_report.txt"), encoding="utf-8") as fh:
+            return fh.read()
+
+    def published(self, name):
+        with open(os.path.join(BACKTEST, name), encoding="utf-8") as fh:
+            return fh.read()
 
     def test_rebuilt_from_the_published_trades(self):
         out = tempfile.mkdtemp(prefix="crypto-bt-")
         try:
             with Session() as s:
-                code, text, err = s.run("tools", "backtest", ["--trades", PUBLISHED, "--venue", "binance",
-                                                             "--end", "2026-10-27 06:00", "--out", out])
-                self.assertEqual(code, 0, err)
-            with open(os.path.join(out, "backtest_report.txt"), encoding="utf-8") as fh:
-                made = fh.read()
-            with open(os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-checks.txt"), encoding="utf-8") as fh:
-                self.assertEqual(fh.read(), made)
-            made = cc.read_json(os.path.join(out, "track_record.json"))
+                first = self.rebuild(s, FIRST, "2026-10-27 06:00", os.path.join(out, "1"))
+                second = self.rebuild(s, SECOND, "2026-07-29 00:00", os.path.join(out, "2"))
+                pooled = self.rebuild(s, FIRST + "," + SECOND, "2026-10-27 06:00", os.path.join(out, "p"))
+            self.assertEqual(self.published("2026-10-27-binance-90d-checks.txt"), first)
+            self.assertEqual(self.published("2026-10-27-binance-180d-pooled-report.txt"), pooled)
+            # the second window's report came from a full run on the user's computer: everything a trades file can
+            # rebuild (all but the random entries) matches it line for line
+            sent = self.published("2026-07-29-binance-90d-report.txt")
+            self.assertIn("crypto-trader-skill 1.1.0, code 0be267c0", sent.splitlines()[0])
+            self.assertEqual(sent[sent.index("The pack's two checks"):], second[second.index("The pack's two checks"):])
+            for line in second.splitlines()[5:10]:
+                self.assertIn(line, sent)
+            made = cc.read_json(os.path.join(out, "p", "track_record.json"))
             shipped = cc.read_json(os.path.join(ROOT, "crypto-setup", "track_record.json"))
             self.assertEqual(json.dumps(made, sort_keys=True), json.dumps(shipped, sort_keys=True))
             self.assertTrue(shipped["costs_estimated"])
-            self.assertEqual((shipped["coins"], shipped["all"]["n"]), (40, 27566))
+            self.assertEqual([r["trades"] for r in shipped["runs"]], [9835, 27566])         # oldest first
+            self.assertEqual((shipped["coins"], shipped["all"]["n"]), (40, 37401))
         finally:
             shutil.rmtree(out, ignore_errors=True)
 

@@ -231,16 +231,19 @@ class TrackRecord(unittest.TestCase):
             self.assertEqual((tr["venue"], tr["coins"], tr["cost_limit_r"]), ("binance", 40, 0.2))
             self.assertEqual(cc.track_key("orb", "ny"), "orb-ny")
             self.assertEqual(cc.track_key("orb"), "orb-utc")
-            self.assertEqual(cc.track_entry("breakout", "long")["n"], 3393)
-            raw, checked = cc.track_parts("breakout", "long")
-            self.assertEqual(raw, "-0.10R a trade after costs over 3,393 trades")
-            self.assertEqual(checked, "+0.02R over 742 (can't be told from zero)")
+            self.assertEqual(cc.track_entry("breakout", "long")["n"], 4453)            # both windows pooled
+            self.assertEqual(len(tr["runs"]), 2)
+            raw, within = cc.track_parts("breakout", "long")
+            self.assertEqual(raw, "-0.10R a trade after costs over 4,453 trades")
+            self.assertEqual(within, "+0.00R over 2,992 (can't be told from zero)")
             self.assertEqual(cc.track_parts("volume", "long")[0],
-                             "-0.02R a trade after costs over 3,226 trades (can't be told from zero)")
+                             "-0.05R a trade after costs over 4,494 trades (can't be told from zero)")
+            self.assertEqual(cc.track_words("breakout", "short"), "-0.23R a trade after costs over 3,534 trades; "
+                                                                  "within the cost rule -0.18R over 2,127")
             self.assertIsNone(cc.track_parts("orb", "long", "tokyo"))
             self.assertIsNone(cc.track_parts("rs", "long"))
             self.assertIsNone(cc.track_parts("breakout", "both"))
-            self.assertEqual(cc.track_source(), "Binance, 40 coins, 29 Jul to 27 Oct 2026")
+            self.assertEqual(cc.track_source(), "Binance, 30 Apr to 27 Oct 2026")       # pooled: coin lists differ
             for k, e in tr["setups"].items():                     # every range holds its own average
                 self.assertLessEqual(e["lo"], e["avg_r"])
                 self.assertLessEqual(e["avg_r"], e["hi"])
@@ -249,13 +252,14 @@ class TrackRecord(unittest.TestCase):
         with Session() as s:
             mine = dict(cc.track_record())
             mine["venue_label"] = "Bybit linear perpetuals"
-            mine["setups"] = {"breakout|long": {"n": 12, "avg_r": 0.5, "lo": 0.1, "hi": 0.9, "checked": {"n": 0}}}
+            mine["runs"] = None                                                    # one run: its coins are named
+            mine["setups"] = {"breakout|long": {"n": 12, "avg_r": 0.5, "lo": 0.1, "hi": 0.9, "cost_rule": {"n": 0}}}
             cc.write_json(s.path("track_record.json"), mine)
             self.assertEqual(cc.track_parts("breakout", "long"), ("+0.50R a trade after costs over 12 trades", "none passed"))
             self.assertIsNone(cc.track_parts("trend", "long"))
             self.assertTrue(cc.track_source().startswith("Bybit, 40 coins"))
             cc.write_json(s.path("track_record.json"), {"not": "a record"})
-            self.assertEqual(cc.track_entry("breakout", "long")["n"], 3393)      # an unusable file is passed over
+            self.assertEqual(cc.track_entry("breakout", "long")["n"], 4453)      # an unusable file is passed over
 
 
 class Indicators(unittest.TestCase):

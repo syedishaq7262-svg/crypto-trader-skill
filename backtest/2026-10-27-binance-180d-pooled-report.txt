@@ -1,0 +1,56 @@
+Backtest | Binance USD-M futures | 40 coins | 2026-04-30 00:00 UTC to 2026-10-27 06:00 UTC | trades re-read from 2026-07-29-binance-90d-trades.csv.gz, 2026-10-27-binance-90d-trades.csv.gz
+  pooled: 2026-07-29-binance-90d-trades.csv.gz, 14 coins, signals 2026-04-30 00:00 UTC to 2026-07-28 23:00 UTC, 9,835 trades
+  pooled: 2026-10-27-binance-90d-trades.csv.gz, 40 coins, signals 2026-07-29 06:00 UTC to 2026-10-27 05:30 UTC, 27,566 trades, stop-out costs rebuilt
+Walk-forward: the scanner's own rules saw only the candles closed at each moment; each trade was
+planned like /crypto-exit (the setup's stop, 2R target, out after 24h) and played on the candles that came
+next, after fees, slippage and the funding actually charged. Fake money only.
+
+37,401 trades: target first 11,862, stopped 23,427, out at the time limit 2,112.
+Won (above zero after costs) 35.3% (95% range 34.8% to 35.8%).
+Average -0.17R a trade after costs (90% range -0.18R to -0.16R); +0.03R before costs, so costs and funding took 0.20R.
+Total -6398.6R. Profit factor 0.78. Average win +1.73R, average loss -1.21R.
+Deepest drawdown 6419.7R; longest losing streak 64.
+Random entries: not in a trades file; the original run's report has them.
+
+By setup (each side tested separately):
+setup                    side   trades  won   avg R  before costs  total R  random  edge
+opening range, UTC day   long    2,195  32%  -0.37R        -0.04R    -808R       -     -
+opening range, UTC day   short   2,122  31%  -0.41R        -0.07R    -875R       -     -
+opening range, New York  long    1,584  35%  -0.21R        +0.03R    -338R       -     -
+opening range, New York  short   1,670  37%  -0.14R        +0.10R    -227R       -     -
+range breakout           long    4,453  36%  -0.10R        +0.07R    -445R       -     -
+range breakout           short   3,534  33%  -0.23R        -0.03R    -814R       -     -
+squeeze break            long      993  40%  +0.00R        +0.14R      +0R       -     -
+squeeze break            short     892  35%  -0.16R        -0.02R    -147R       -     -
+trend pullback           long    4,650  36%  -0.12R        +0.06R    -541R       -     -
+trend pullback           short   4,703  35%  -0.23R        +0.01R   -1060R       -     -
+RSI reversal             long      474  43%  -0.00R        +0.09R      -1R       -     -
+RSI reversal             short     804  39%  -0.17R        -0.10R    -136R       -     -
+volume spike             long    4,494  38%  -0.05R        +0.11R    -204R       -     -
+volume spike             short   4,833  35%  -0.17R        -0.02R    -803R       -     -
+
+The pack's two checks, on the 34,114 trades after the first 30 days, each judged with only what was known
+at the time:
+  cost rule      a stop-out costs at most 0.2R (fees and slippage, known before the entry); for trades from a file with no cost column, rebuilt from each coin's stop-outs
+  30-day check   the same coin, setup and side made money after costs over its last 30 days, at least 5 trades
+A rule that helps in only one half of the stretch is the market's mood, not a rule. The halves split at 2026-08-13 03:00 UTC.
+                trades  first half  second half     all  won
+  every signal  34,114      -0.22R       -0.16R  -0.18R  35%
+  cost rule     21,461      -0.14R       -0.04R  -0.07R  36%
+  30-day check   9,489      -0.22R       -0.04R  -0.09R  36%
+  both checks    7,242      -0.18R       +0.02R  -0.04R  36%
+Over the whole window, the 14,078 trades whose stop-out cost more than 0.2R averaged -0.35R after costs (+0.02R before);
+the other 23,323 averaged -0.06R (+0.03R before).
+
+A $1,000 paper account under the pack's default limits ($10 at risk a trade, 2 open, 4 a day, a pause after
+2 losses in a row, $30 of losses a day), on the same 34,114 trades, run 100 times. It takes whatever fires
+first each day, so each run starts its day at a random hour (as a trader's day starts at midnight where
+they live) and takes signals that fire together in a random order. The median run, and the middle 90%:
+                     taken  became      middle 90%  drawdown  runs that lost
+  every signal  400 trades    $247     -$3 to $692      $917       99 of 100
+  cost rule     394 trades    $639    $287 to $970      $521       96 of 100
+  30-day check  405 trades    $563    $187 to $952      $654       97 of 100
+  both checks   392 trades    $686  $282 to $1,126      $552       90 of 100
+
+Survivorship: the coins are today's busiest, so coins that faded or were delisted are missing. Costs are
+today's fees and slippage. Past results say nothing certain about the future.

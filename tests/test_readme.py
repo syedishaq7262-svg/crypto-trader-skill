@@ -72,6 +72,7 @@ class ReadmeExample(unittest.TestCase):
 
 
 BT_REPORT = os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-report.txt")
+BT_SECOND = os.path.join(ROOT, "backtest", "2026-07-29-binance-90d-report.txt")
 BT_CHECKS = os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-checks.txt")
 BT_TRADES = os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-trades.csv.gz")
 CHECK_ROWS = (("every signal", "every signal"), ("the cost rule", "cost rule"), ("the 30-day check", "30-day check"),
@@ -118,6 +119,34 @@ class ReadmeBacktest(unittest.TestCase):
                       "and lost 0.38R a trade after\n  them.", sec)
         self.assertIn("the 10,209 trades whose stop-out cost more than 0.2R averaged -0.38R after costs (-0.01R before)", checks)
         self.assertIn("Halves split at 2026-09-27 06:00 UTC", checks.replace("halves split", "Halves split"))
+
+    def test_the_second_window_is_its_report(self):
+        with open(BT_SECOND) as fh:
+            report = fh.read()
+        table = report.split("A $1,000 paper account")[0]
+        sec = self.section()
+        part = sec[sec.index("### Then 90 days it had never seen"):]
+
+        def row(label):
+            k = len(label.split())
+            return [l.split()[k:] for l in table.splitlines()
+                    if l.startswith("  " + label + " ") and re.match(r"^[0-9,]+$", l.split()[k])][0]
+        for words, label in CHECK_ROWS:
+            n, first, second = row(label)[:3]
+            self.assertIn("| %s | %s | %s | %s |" % (words, first, second, n), part)
+        self.assertIn("The halves split at 2026-06-29 00:00 UTC.", report)
+        self.assertIn("| average a trade, after costs | 30 May to 29 Jun | 29 Jun to 29 Jul | trades |", part)
+        for said, shown in (("9,835 trades", "9,835 trades"), ("-0.15R a trade after costs, +0.04R\n  before",
+                                                                "Average -0.15R a trade after costs"),
+                            ("random entries (+0.08R)", "the setups' edge over them +0.08R"),
+                            ("lost 0.26R a trade,\n  against 0.08R for the rest", "averaged -0.26R after costs"),
+                            ("the two rules together\n  lost 0.14R a trade", "  both checks    1,493      -0.06R       -0.30R  -0.14R")):
+            self.assertIn(said, part)
+            self.assertIn(shown, report)
+        self.assertIn("averaged -0.08R (+0.02R before)", report)
+        for line in table.splitlines()[14:28]:                  # no setup and side made money after costs
+            if line.strip():
+                self.assertTrue(line.split()[-5].startswith("-"), line)       # avg R after costs
 
     def test_the_report_and_the_table_come_from_the_trades(self):
         with gzip.open(BT_TRADES, "rt", encoding="utf-8", newline="") as fh:

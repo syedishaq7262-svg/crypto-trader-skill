@@ -1,0 +1,54 @@
+Backtest | Binance USD-M futures | 14 coins | 2026-04-30 00:00 UTC to 2026-07-29 00:00 UTC | crypto-trader-skill 1.1.0, code 0be267c0
+Walk-forward: the scanner's own rules saw only the candles closed at each moment; each trade was
+planned like /crypto-exit (the setup's stop, 2R target, out after 24h) and played on the candles that came
+next, after fees, slippage and the funding actually charged. Fake money only.
+
+9,835 trades: target first 3,193, stopped 6,127, out at the time limit 515.
+Won (above zero after costs) 35.8% (95% range 34.8% to 36.7%).
+Average -0.15R a trade after costs (90% range -0.17R to -0.12R); +0.04R before costs, so costs and funding took 0.19R.
+Total -1457.7R. Profit factor 0.81. Average win +1.74R, average loss -1.20R.
+Deepest drawdown 1514.7R; longest losing streak 37.
+Random entries at the same times of day, same stops and targets: -0.23R a trade over 98,350; the setups' edge over them +0.08R.
+
+By setup (each side tested separately):
+setup                    side   trades  won   avg R  before costs  total R  random    edge
+opening range, UTC day   long      521  32%  -0.37R        -0.04R    -193R  -0.42R  +0.05R
+opening range, UTC day   short     594  37%  -0.19R        +0.11R    -116R  -0.19R  -0.01R
+opening range, New York  long      407  35%  -0.18R        +0.04R     -73R  -0.22R  +0.04R
+opening range, New York  short     441  38%  -0.08R        +0.13R     -35R  -0.33R  +0.25R
+range breakout           long    1,060  36%  -0.11R        +0.07R    -114R  -0.26R  +0.15R
+range breakout           short     977  33%  -0.21R        -0.02R    -205R  -0.22R  +0.01R
+squeeze break            long      299  39%  -0.02R        +0.12R      -7R  -0.11R  +0.09R
+squeeze break            short     224  35%  -0.16R        -0.05R     -37R  -0.15R  -0.01R
+trend pullback           long    1,082  34%  -0.18R        +0.00R    -196R  -0.19R  +0.01R
+trend pullback           short   1,400  36%  -0.17R        +0.05R    -237R  -0.22R  +0.05R
+RSI reversal             long      132  31%  -0.18R        -0.08R     -23R  -0.14R  -0.04R
+RSI reversal             short     169  44%  -0.01R        +0.06R      -1R  -0.13R  +0.12R
+volume spike             long    1,268  36%  -0.11R        +0.05R    -137R  -0.22R  +0.11R
+volume spike             short   1,261  38%  -0.07R        +0.09R     -83R  -0.24R  +0.17R
+
+The pack's two checks, on the 6,548 trades after the first 30 days, each judged with only what was known
+at the time:
+  cost rule      a stop-out costs at most 0.2R (fees and slippage, known before the entry)
+  30-day check   the same coin, setup and side made money after costs over its last 30 days, at least 5 trades
+A rule that helps in only one half of the stretch is the market's mood, not a rule. The halves split at 2026-06-29 00:00 UTC.
+                trades  first half  second half     all  won
+  every signal   6,548      -0.10R       -0.24R  -0.17R  35%
+  cost rule      4,104      -0.05R       -0.15R  -0.10R  35%
+  30-day check   2,048      -0.08R       -0.35R  -0.18R  33%
+  both checks    1,493      -0.06R       -0.30R  -0.14R  33%
+Over the whole window, the 3,869 trades whose stop-out cost more than 0.2R averaged -0.26R after costs (+0.08R before);
+the other 5,966 averaged -0.08R (+0.02R before).
+
+A $1,000 paper account under the pack's default limits ($10 at risk a trade, 2 open, 4 a day, a pause after
+2 losses in a row, $30 of losses a day), on the same 6,548 trades, run 100 times. It takes whatever fires
+first each day, so each run starts its day at a random hour (as a trader's day starts at midnight where
+they live) and takes signals that fire together in a random order. The median run, and the middle 90%:
+                     taken  became      middle 90%  drawdown  runs that lost
+  every signal  162 trades    $753    $510 to $988      $387       96 of 100
+  cost rule     156 trades    $824  $530 to $1,053      $293       91 of 100
+  30-day check  157 trades    $712    $530 to $958      $454      100 of 100
+  both checks   149 trades    $751    $583 to $989      $369       97 of 100
+
+Survivorship: the coins are today's busiest, so coins that faded or were delisted are missing. Costs are
+today's fees and slippage. Past results say nothing certain about the future.

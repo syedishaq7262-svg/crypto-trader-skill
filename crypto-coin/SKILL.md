@@ -77,9 +77,9 @@ Flags: `--no-setups`, `--no-news`, `--venue`, `--now`, `--offline`,
   be read just now. It is an extra: one quick try, never a long wait.
 - **Setups now**: the scanner's single-coin setups that match right now.
 - **Backtest**: each live setup and side's record in the pack's walk-forward
-  backtest (Binance, 40 coins, 90 days): the average trade after costs, and
-  the average over the trades that passed both checks (the cost rule, and a
-  positive 30-day record on that coin). "Can't be told from zero" means the
+  backtests (Binance, two 90-day runs pooled, 30 Apr to 27 Oct 2026): the
+  average trade after costs, and the average over the trades within the
+  cost rule, the ones the pack lets you take. "Can't be told from zero" means the
   range around the average, widened for testing 14 setup-and-side groups at
   once, spans zero. Most setups lost money after costs; say so when it
   applies.
@@ -124,8 +124,8 @@ Market     BTC 24h -0.8% | moves 1.3x BTC | -6.4% vs what BTC implied | Fear & G
 News       2 headlines in 24h; latest: "SOL Climbs as Solana Funds Draw Fresh Inflows" (CoinDesk, 35m ago) [ETF]  /crypto-news has the rest
 Macro      US CPI m/m in 2h45m
 Setups now opening-range breakout long (back inside)
-Backtest   UTC-day opening-range breakout longs: -0.37R a trade after costs over 1,674 trades; with both checks -0.21R over 117 (can't be told from zero)
-           (the walk-forward backtest: Binance, 40 coins, 29 Jul to 27 Oct 2026)
+Backtest   UTC-day opening-range breakout longs: -0.37R a trade after costs over 2,195 trades; within the cost rule -0.06R over 745 (can't be told from zero)
+           (the walk-forward backtest: Binance, 30 Apr to 27 Oct 2026)
 Note       Funding is in the bottom 5% of the last 30 days: holding a short is unusually expensive.
 Context, not a call. Next: /crypto-exit SOL to plan a stop and target.
 ```
@@ -134,7 +134,7 @@ The 1d trend shows `-` because the test market keeps only 35 days, too few
 for a 50-day average; real exchanges have years of daily candles.
 
 The opening-range breakout on SOL has already failed (back inside), and the
-backtest line says what the UTC-day opening range did over 90 days on real
+backtest line says what the UTC-day opening range did over 180 days of real
 prices: it lost 0.37R a trade on longs after costs.
 
 ## Rules

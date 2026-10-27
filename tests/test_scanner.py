@@ -87,12 +87,12 @@ class PlantedSetups(unittest.TestCase):
         brkx = find(hits, "BRKX", "breakout", "long")[0]
         self.assertFalse(brkx["too_tight"])
         self.assertIn("%.2fR over" % bonk["stop_cost_r"], out)
-        self.assertIn("Range breakout | backtest: longs -0.10R, shorts -0.24R a trade after costs", out)
-        self.assertIn("| backtest: longs -0.22R, shorts -0.16R a trade after costs", out)       # the New York range
-        self.assertIn("Squeeze (volatility compression) | backtest of the break: longs +0.01R, shorts -0.17R", out)
+        self.assertIn("Range breakout | backtest: longs -0.10R, shorts -0.23R a trade after costs", out)
+        self.assertIn("| backtest: longs -0.21R, shorts -0.14R a trade after costs", out)       # the New York range
+        self.assertIn("Squeeze (volatility compression) | backtest of the break: longs +0.00R, shorts -0.16R", out)
         self.assertIn("Relative strength vs BTC\n", out)                                      # no stop, no backtest
         self.assertIn("Over 0.2R (max_cost_r) crypto-risk blocks the trade.", out)
-        self.assertIn("walk-forward backtest (Binance, 40 coins, 29 Jul to 27 Oct 2026)", out)
+        self.assertIn("walk-forward backtest (Binance, 30 Apr to 27 Oct 2026)", out)
         for h in hits:
             if h["side"] in cc.SIDES and h.get("stop_ref") is not None:
                 self.assertIn("stop_cost_r", h, h["coin"])
