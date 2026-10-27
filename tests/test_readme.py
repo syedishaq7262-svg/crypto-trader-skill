@@ -1,5 +1,8 @@
 """The README's worked example: the same chain on the test market, and every number it quotes."""
 
+import csv
+import gzip
+import io
 import os
 import re
 import unittest
@@ -66,6 +69,48 @@ class ReadmeExample(unittest.TestCase):
         for said, shown in FACTS:
             self.assertIn(squash(said), example, "the README no longer says: %s" % said)
             self.assertIn(squash(shown), printed, "the tools no longer print: %s" % shown)
+
+
+BT_REPORT = os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-report.txt")
+BT_TRADES = os.path.join(ROOT, "backtest", "2026-10-27-binance-90d-trades.csv.gz")
+
+
+class ReadmeBacktest(unittest.TestCase):
+    """The README's backtest numbers are the published report's, and the report's are the published trades'."""
+
+    def section(self):
+        with open(os.path.join(ROOT, "README.md")) as fh:
+            text = fh.read()
+        a = text.index("## Backtest: 27,566 trades on real past prices")
+        return text[a:text.index("## The tools", a)]
+
+    def test_the_numbers_are_the_reports(self):
+        with open(BT_REPORT) as fh:
+            report = fh.read()
+        sec = self.section()
+        for x in ("27,566", "8,669", "17,300", "1,597", "35.1%", "34.6%", "35.7%", "-0.18R", "-0.19R", "-0.16R",
+                  "+0.02R", "0.20R", "0.77", "+0.06R", "5,426", "-0.05R", "$516.95", "241 trades", "$562.97",
+                  "+0.07R", "342", "+0.01R", "694", "-0.37R", "-0.50R"):
+            self.assertIn(x, sec, x)
+            self.assertIn(x, report, x)
+
+    def test_the_report_and_the_table_come_from_the_trades(self):
+        with gzip.open(BT_TRADES, "rt", encoding="utf-8", newline="") as fh:
+            rows = list(csv.DictReader(io.StringIO(fh.read())))
+        self.assertEqual(len(rows), 27566)
+        r = [float(x["r_after_costs"]) for x in rows]
+        self.assertEqual("%+.2fR" % (sum(r) / len(r)), "-0.18R")
+        self.assertEqual("%.1f%%" % (100.0 * sum(1 for v in r if v > 0) / len(r)), "35.1%")
+        self.assertEqual("%+.2fR" % (sum(float(x["r_before_costs"]) for x in rows) / len(rows)), "+0.02R")
+        groups = [(0, 0.25, "under 0.25%"), (0.25, 0.5, "0.25% to 0.5%"), (0.5, 1, "0.5% to 1%"), (1, 2, "1% to 2%"),
+                  (2, 1e9, "2% or more")]
+        sec = self.section()
+        for lo, hi, label in groups:
+            g = [x for x in rows if lo <= float(x["stop_distance_pct"]) < hi]
+            line = "| %s | %s | %+.2fR | %+.2fR |" % (label, "{:,}".format(len(g)),
+                                                    sum(float(x["r_before_costs"]) for x in g) / len(g),
+                                                    sum(float(x["r_after_costs"]) for x in g) / len(g))
+            self.assertIn(line, sec)
 
 
 if __name__ == "__main__":

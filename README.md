@@ -18,6 +18,10 @@ planned trade 10,000 times from the coin's own recent candles, re-runs the
 same setup on its last 30 days, and tests it against random entries before
 you risk a dollar.
 
+Every setup with a stop was also backtested walk-forward: 27,566 trades over
+90 days of real Binance prices, with fake money. The results are
+[below](#backtest-27566-trades-on-real-past-prices), losses included.
+
 No trade goes through until you say yes. Nothing in this pack can place an
 order on its own. Paper trading is the default, and it is not a testnet: it
 fills at live prices against the real order book and plays your stop and
@@ -134,6 +138,79 @@ chain and check every number below.
    about $9.64 to lose. Nothing happens unless you type yes for that exact
    order. Here, the evidence says no, and that is the point of looking
    before you risk a dollar.
+
+## Backtest: 27,566 trades on real past prices
+
+We went back 90 days, from 29 July to 27 October 2026, on Binance's 40
+busiest perpetuals, and pretended each moment was today. Moving forward one
+candle at a time, the scanner saw only the candles that had closed by then,
+never a later one. Whenever a setup fired, we opened a trade with fake money
+the way the pack plans one: the stop at the setup's own invalidation point,
+the take-profit at 2R (twice the risk), out after 24 hours either way, one
+trade at a time per coin, setup and side. Then we played each trade on the
+5-minute candles that came next, counted the stop whenever one candle
+touched both the stop and the target, and charged the fees, the slippage
+and the funding each trade would have paid. Six setups, long and short: the
+opening range of the UTC day and of the New York open, range breakouts,
+squeezes, trend pullbacks, RSI reversals and volume spikes. Strength against
+BTC is a ranking with no stop, so it is left out. 27,566 trades in all.
+
+| | result |
+| --- | --- |
+| trades | 27,566: target hit first 8,669, stopped out 17,300, closed at the 24-hour limit 1,597 |
+| won (above zero after costs) | 35.1% (95% range 34.6% to 35.7%) |
+| average a trade, after costs | -0.18R (90% range -0.19R to -0.16R) |
+| average a trade, before costs | +0.02R |
+| fees, slippage and funding | 0.20R a trade |
+| profit factor | 0.77 |
+| against random entries (same times of day, same stops and targets) | +0.06R a trade better |
+| the Scout's first test as it stood at the time (5,426 trades) | -0.05R a trade, against -0.16R for every signal over the same weeks |
+| a $1,000 paper account under the pack's limits ($10 at risk, 2 open, 4 a day) | $516.95 after 241 trades; $562.97 with the Scout's first test |
+
+What it says:
+
+- **Taken blindly, the setups lost money.** Before costs they came out
+  about even (+0.02R a trade), and they beat random entries at the same
+  times by 0.06R a trade, so the rules do pick slightly better moments than
+  chance. Not by enough to pay the costs.
+- **Costs decided it, and tight stops cost the most.** Fees and slippage are
+  a fixed share of the price, so the closer the stop, the bigger they are
+  against the risk. Before costs every group below was close to zero:
+
+  | stop distance | trades | before costs | after costs |
+  | --- | --- | --- | --- |
+  | under 0.25% | 669 | +0.06R | -0.61R |
+  | 0.25% to 0.5% | 2,760 | -0.01R | -0.41R |
+  | 0.5% to 1% | 7,469 | +0.04R | -0.22R |
+  | 1% to 2% | 8,822 | +0.02R | -0.14R |
+  | 2% or more | 7,846 | +0.01R | -0.08R |
+
+- **Checking the evidence first helped, but did not make it profitable.**
+  Taking a setup only when its own last 30 days on that coin had made money
+  after costs, over at least 5 trades (the Scout's first test, judged with
+  only what was known at the time), cut the loss from -0.16R to -0.05R a
+  trade.
+- **No setup clearly made money.** RSI reversal longs (+0.07R over 342
+  trades) and squeeze-break longs (+0.01R over 694) were the only ones above
+  zero, and neither result can be told apart from zero. The opening range of
+  the UTC day was the worst: -0.37R long and -0.50R short.
+
+What the pack does about it: the Scout tests each setup on its own coin
+before you trade it and says "nothing today" when nothing qualifies, the
+Exit Planner warns when fees and slippage would cost more than 0.2R on a
+stop-out, the Risk Manager caps the damage, and paper trading is the
+default.
+
+Caveats: the coins are today's busiest, so coins that faded or were delisted
+are missing; past trades were charged today's fees and slippage; 90 days is
+one stretch of one market. Every trade and the full report are in
+[backtest/](backtest/), and you can run it yourself on Binance or Bybit, over
+any window (Hyperliquid keeps too little 5-minute history):
+
+```bash
+python3 tools/backtest.py                        # the 40 busiest coins, the last 90 days
+python3 tools/backtest.py --coins 20 --days 60 --venue bybit
+```
 
 ## The tools
 
@@ -292,6 +369,7 @@ crypto-broker/       SKILL.md, broker.py, exchanges.py
 crypto-alerts/       SKILL.md, alerts.py
 crypto-journal/      SKILL.md, journal.py
 tools/               live_check.py: every skill against the real exchanges; backtest.py: the walk-forward backtest
+backtest/            the published backtest: the report and every trade (CSV, gzipped)
 tests/               unittest suite, a fake exchange, real recorded responses
 ```
 

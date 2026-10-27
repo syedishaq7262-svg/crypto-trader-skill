@@ -1,0 +1,41 @@
+Backtest | Binance USD-M futures | 40 coins | 2026-07-29 06:00 UTC to 2026-10-27 06:00 UTC | crypto-trader-skill 1.0.0, code e8b3eac5
+Walk-forward: the scanner's own rules saw only the candles closed at each moment; each trade was
+planned like /crypto-exit (the setup's stop, 2R target, out after 24h) and played on the candles that came
+next, after fees, slippage and the funding actually charged. Fake money only.
+
+27,566 trades: target first 8,669, stopped 17,300, out at the time limit 1,597.
+Won (above zero after costs) 35.1% (95% range 34.6% to 35.7%).
+Average -0.18R a trade after costs (90% range -0.19R to -0.16R); +0.02R before costs, so costs and funding took 0.20R.
+Total -4940.9R. Profit factor 0.77. Average win +1.73R, average loss -1.21R.
+Deepest drawdown 4954.2R; longest losing streak 64.
+Random entries at the same times of day, same stops and targets: -0.24R a trade over 275,620; the setups' edge over them +0.06R.
+
+By setup (each side tested separately):
+setup                    side   trades  won   avg R  total R  random    edge
+opening range, UTC day   long    1,674  32%  -0.37R    -614R  -0.33R  -0.04R
+opening range, UTC day   short   1,528  29%  -0.50R    -760R  -0.41R  -0.09R
+opening range, New York  long    1,177  34%  -0.22R    -265R  -0.27R  +0.04R
+opening range, New York  short   1,229  36%  -0.16R    -191R  -0.24R  +0.09R
+range breakout           long    3,393  36%  -0.10R    -331R  -0.23R  +0.13R
+range breakout           short   2,557  33%  -0.24R    -609R  -0.28R  +0.04R
+squeeze break            long      694  40%  +0.01R      +7R  -0.10R  +0.12R
+squeeze break            short     668  35%  -0.17R    -110R  -0.17R  +0.00R
+trend pullback           long    3,568  36%  -0.10R    -345R  -0.20R  +0.11R
+trend pullback           short   3,303  34%  -0.25R    -823R  -0.21R  -0.04R
+RSI reversal             long      342  47%  +0.07R     +23R  -0.10R  +0.18R
+RSI reversal             short     635  38%  -0.21R    -135R  -0.16R  -0.05R
+volume spike             long    3,226  38%  -0.02R     -67R  -0.22R  +0.20R
+volume spike             short   3,572  34%  -0.20R    -720R  -0.26R  +0.06R
+
+The Scout's first test, as it stood at the time (its own last 30 days on that coin positive after costs,
+at least 5 trades), judged on the 18,462 trades after the first 30 days:
+  every signal     18,462 trades, won 35%, average -0.16R a trade, total -3015R
+  passed the test   5,426 trades, won 37%, average -0.05R a trade, total -255R
+
+A $1,000 paper account under the pack's default limits ($10 at risk a trade, 2 open, 4 a day, a pause after
+2 losses in a row, $30 of losses a day):
+  every signal        241 trades taken, $1,000 became $516.95, deepest drawdown $508.32
+  Scout's first test  160 trades taken, $1,000 became $562.97, deepest drawdown $439.23
+
+Survivorship: the coins are today's busiest, so coins that faded or were delisted are missing. Costs are
+today's fees and slippage. Past results say nothing certain about the future.
