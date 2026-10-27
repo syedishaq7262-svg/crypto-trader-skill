@@ -80,6 +80,18 @@ class OneCoin(unittest.TestCase):
             self.assertIn("which coin", err)
 
 
+class Words(unittest.TestCase):
+    def test_the_crowding_read_agrees_with_the_accounts(self):
+        self.assertIn("Most accounts are long too (56%)", cc.crowd_read("hot funding", 0.56))
+        self.assertIn("Yet most accounts are short (53%), so the longs are likely fewer and bigger",
+                      cc.crowd_read("hot funding", 0.47))
+        self.assertIn("split evenly", cc.crowd_read("hot funding", 0.502))
+        self.assertIn("Yet most accounts are long (72%), so the shorts are likely fewer and bigger",
+                      cc.crowd_read("deeply negative funding", 0.72))
+        self.assertEqual(cc.crowd_read("hot funding", None), cc.CROWD_READ["hot funding"])
+        self.assertEqual(cc.crowd_read("crowded longs", 0.3), cc.CROWD_READ["crowded longs"])
+
+
 class Regime(unittest.TestCase):
     def test_regime_reads_and_writes(self):
         with Session() as s:

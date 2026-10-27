@@ -114,7 +114,7 @@ class Repo(unittest.TestCase):
     def test_standard_library_only(self):
         import sys
         allowed = set(getattr(sys, "stdlib_module_names", ())) | set((
-            "argparse ast base64 bisect collections concurrent contextlib datetime email gzip hashlib hmac html importlib io json "
+            "argparse ast atexit base64 bisect collections concurrent contextlib datetime email gzip hashlib hmac html importlib io json "
             "math os platform random re shutil socket ssl statistics sys tempfile threading time traceback urllib uuid xml zipfile").split())
         allowed.add("cryptocore")
         for s in SKILLS + ["tools"]:

@@ -1744,7 +1744,9 @@ def crowd_read(label, long_share=None):
     if label in ("hot funding", "deeply negative funding") and long_share is not None:
         side, other = ("long", "short") if label == "hot funding" else ("short", "long")
         share = long_share if side == "long" else 1.0 - long_share
-        if share >= 0.5:
+        if round(share * 100) == 50:
+            words += " Accounts are split evenly between long and short."
+        elif share > 0.5:
             words += " Most accounts are %s too (%d%%)." % (side, round(share * 100))
         else:
             words += " Yet most accounts are %s (%d%%), so the %ss are likely fewer and bigger." % (
