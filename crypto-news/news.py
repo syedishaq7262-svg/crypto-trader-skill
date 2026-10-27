@@ -77,12 +77,14 @@ NOT_TICKERS = set((
 TAGS = [   # (tag, acronyms that must match their case, words in any case)
     ("hack", None, r"hack(?:ed|ers?|s)?|exploit(?:ed|er|s)?|drain(?:ed|s)?|stolen|breach|attacker|rug ?pull"),
     ("depeg", None, r"de-?peg(?:ged|s)?"),
-    ("outage", None, r"outage|halt(?:ed|s)?|paus(?:e|ed|es)|suspend(?:s|ed)?|downtime"),
+    ("outage", None, r"outage|downtime|chain halt|network halt|(?:halt(?:s|ed)?|paus(?:e|es|ed)|suspend(?:s|ed)?)"
+                     r"(?: all)? (?:withdrawals?|deposits?|trading|transfers|block production)"),
     ("delisting", None, r"delist(?:s|ed|ing)?"),
-    ("listing", None, r"(?<!de)list(?:s|ed|ing)|launches perpetual|new perpetual"),
+    ("listing", None, r"(?<!de)(?<!-)(?<!publicly )list(?:s|ed|ing)(?! (?:company|companies|firm|firms))|"
+                      r"(?:will|to) list|launches perpetual|new perpetual"),
     ("unlock", None, r"unlock(?:s|ed)?|vesting"),
-    ("regulatory", r"SEC|CFTC|DOJ|MiCA", r"regulators?|regulation|lawsuit|sue[sd]?|court|charged|charges|bans?|banned|"
-                                         r"sanction(?:s|ed)?|settle(?:s|d|ment)|enforcement|subpoena"),
+    ("regulatory", r"SEC|CFTC|DOJ|MiCA", r"regulators?|regulation|lawsuit|sue[sd]?|court|charged with|charges against|"
+                                         r"bans?|banned|sanction(?:s|ed)?|settles? with|settlement with|enforcement|subpoena"),
     ("ETF", r"ETFs?", r"inflows?|outflows?"),
     ("macro", r"Fed|FOMC|CPI|PCE|GDP", r"Powell|inflation|rate (?:cut|hike)s?|interest rates?|jobs report|payrolls|"
                                        r"tariffs?|Treasury yields?|recession"),
@@ -290,34 +292,53 @@ def cluster(items):
 
 # ---------------------------------------------------------------- fetching
 
+FAILED_FOR_MS = 10 * 60000     # a source that just failed is not asked again for 10 minutes
+SOURCE_TIMEOUT_S = 10.0         # news and calendars are extras: they never hold a market answer up for long
+
+
 def cached(name, max_age, fetch, note_old=True):
-    """(data, note): a fresh copy from fetch(), or the saved one when it is young enough or fetch fails."""
+    """(data, note): a fresh copy from fetch(), or the saved one when it is young enough or fetch fails.
+    A failure is remembered for 10 minutes, so a slow or rate-limited source costs one wait, not one per tool."""
     path = cc.wpath("cache", name)
     saved = cc.read_json(path, None)
     now = cc.now_ms()
     if saved and 0 <= now - saved.get("at", 0) <= max_age:
         return saved["data"], None
-    try:
-        data = fetch()
-    except cc.CryptoError as e:
-        if saved and now - saved.get("at", 0) <= 7 * DAY:
-            return saved["data"], "%s (showing the copy from %s)" % (e, cc.fmt_local(saved["at"]))
-        raise
-    cc.write_json(path, {"at": now, "data": data})
-    return data, None
+    failed_path = cc.wpath("cache", name.replace(".json", "") + ".failed.json")
+    failed = cc.read_json(failed_path, None)
+    if failed and 0 <= now - failed.get("at", 0) <= FAILED_FOR_MS:
+        age = now - failed["at"]
+        err = cc.CryptoError((failed.get("error") or "it failed") + ((" (last tried %s ago)" % cc.fmt_dur(age)) if age >= 60000 else ""))
+    else:
+        try:
+            data = fetch()
+        except cc.CryptoError as e:
+            err = e
+            cc.write_json(failed_path, {"at": now, "error": str(e)})
+        else:
+            cc.write_json(path, {"at": now, "data": data})
+            if failed:
+                try:
+                    os.remove(failed_path)
+                except OSError:
+                    pass
+            return data, None
+    if saved and now - saved.get("at", 0) <= 7 * DAY:
+        return saved["data"], "%s (showing the copy from %s)" % (err, cc.fmt_local(saved["at"]))
+    raise err
 
 
-def fetch_feed(name, url):
+def fetch_feed(name, url, retries=1):
     def get():
-        text = cc.HTTP.request("GET", url, raw=True, headers={
+        text = cc.HTTP.request("GET", url, raw=True, timeout=SOURCE_TIMEOUT_S, retries=retries, headers={
             "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.5"})
         return parse_feed(text, name)
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return cached("news-%s.json" % slug, FEED_CACHE_MS, get)
 
 
-def read_feeds(feeds):
-    results = cc.parallel(lambda f: fetch_feed(f[0], f[1]), feeds, workers=8)
+def read_feeds(feeds, retries=1):
+    results = cc.parallel(lambda f: fetch_feed(f[0], f[1], retries), feeds, workers=8)
     items, sources = [], []
     for (name, url), res, err in results:
         if err is not None:
@@ -331,7 +352,7 @@ def read_feeds(feeds):
 
 def macro_calendar():
     def get():
-        data = cc.HTTP.request("GET", MACRO_URL)
+        data = cc.HTTP.request("GET", MACRO_URL, timeout=SOURCE_TIMEOUT_S, retries=0)   # a strict host: ask once
         if not isinstance(data, list):
             raise cc.CryptoError("the calendar feed answered something unexpected")
         out = []
@@ -352,10 +373,14 @@ def notices(known):
     def get():
         out = []
         for kind in ("delistings", "new_crypto"):
-            res = cc.HTTP.request("GET", NOTICES_URL, params={"locale": "en-US", "type": kind, "limit": 20})
+            res = cc.HTTP.request("GET", NOTICES_URL, params={"locale": "en-US", "type": kind, "limit": 20},
+                                  timeout=SOURCE_TIMEOUT_S, retries=1)
             if not isinstance(res, dict) or res.get("retCode") not in (0, None):
                 raise cc.CryptoError("Bybit's announcements answered %s" % (res.get("retMsg") if isinstance(res, dict) else "?"))
             for n in (res.get("result") or {}).get("list") or []:
+                low = (n.get("title") or "").lower()
+                if "tradfi" in low or "list" not in low:
+                    continue           # stock and ETF contracts, and promotions such as token splashes, are not crypto listings
                 at = n.get("dateTimestamp") or n.get("publishTime") or n.get("startDateTimestamp")
                 try:
                     at = int(at)
@@ -383,7 +408,7 @@ def feeds_from(cfg):
 def coin_headlines(coin, known, cfg, hours=24.0):
     """Headlines naming one coin in the last `hours`, each story once, newest first; and how many feeds answered.
     crypto-coin puts these on its card."""
-    items, sources = read_feeds(feeds_from(cfg))
+    items, sources = read_feeds(feeds_from(cfg), retries=0)      # a card waits for no slow website twice
     now = cc.now_ms()
     mine = []
     for it in items:
@@ -400,11 +425,8 @@ def coin_headlines(coin, known, cfg, hours=24.0):
 
 
 def macro_soon(hours=24.0, countries=("USD",)):
-    """High-impact releases from 2 hours ago to `hours` ahead, oldest first ([] when the calendar cannot be read)."""
-    try:
-        events, _ = macro_calendar()
-    except cc.CryptoError:
-        return None
+    """High-impact releases from 2 hours ago to `hours` ahead, oldest first. Raises when the calendar cannot be read."""
+    events, _ = macro_calendar()
     now = cc.now_ms()
     rows = [e for e in events if e["impact"] == "High" and e["country"] in countries
             and now - 2 * HOUR <= e["at"] <= now + int(hours * HOUR)]

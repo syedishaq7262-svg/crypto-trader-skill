@@ -35,6 +35,18 @@ import cryptocore as cc  # noqa: E402
 
 KEY_VARS = ("BINANCE_API_KEY", "BINANCE_API_SECRET", "BYBIT_API_KEY", "BYBIT_API_SECRET")   # hidden while it runs
 
+
+def share_news_cache(src, dst):
+    """Hand the news, calendar and notices caches to the next venue's folder: those sites are the same for every
+    venue, and the calendar's host allows only a few requests an hour."""
+    a, b = os.path.join(src, "cache"), os.path.join(dst, "cache")
+    if not os.path.isdir(a):
+        return
+    os.makedirs(b, exist_ok=True)
+    for f in os.listdir(a):
+        if f.startswith(("news-", "macro", "notices")) and f.endswith(".json"):
+            shutil.copyfile(os.path.join(a, f), os.path.join(b, f))
+
 SKILLS = {
     "setup": ("crypto-setup", "setup"), "scan": ("crypto-scanner", "scan"), "derivs": ("crypto-derivs", "derivs"),
     "coin": ("crypto-coin", "coin"), "exit": ("crypto-exit", "exit"), "tm": ("crypto-timemachine", "timemachine"),
@@ -317,8 +329,12 @@ def main(argv=None):
                 venues.append("hyperliquid")            # its data paths differ the most: always worth a look
         if not venues:
             say("No venue answered from here, so nothing else can be checked.")
+        prev = None
         for vn in venues:
             os.environ["CRYPTO_DIR"] = os.path.join(tmp, vn)       # each venue starts clean: no state carries over
+            if prev:
+                share_news_cache(os.path.join(tmp, prev), os.path.join(tmp, vn))
+            prev = vn
             say("")
             say("== %s ==" % cc.VENUES[vn].label)
             for c in checks_for(vn, a.quick):

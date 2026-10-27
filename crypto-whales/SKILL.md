@@ -35,7 +35,7 @@ trade.
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/whales.py" top                          # best this month, accounts over $100K
 python3 "${CLAUDE_SKILL_DIR}/whales.py" top --window allTime --min-account 1000000 --n 30
-python3 "${CLAUDE_SKILL_DIR}/whales.py" coin BTC                     # who among the top 50 holds BTC
+python3 "${CLAUDE_SKILL_DIR}/whales.py" coin BTC                     # who among the top 50 holds BTC ($10K or more)
 python3 "${CLAUDE_SKILL_DIR}/whales.py" wallet 0xABC...              # positions and the last 7 days of fills
 python3 "${CLAUDE_SKILL_DIR}/whales.py" follow 0xABC... --name ace   # unfollow, following
 python3 "${CLAUDE_SKILL_DIR}/whales.py" changes                      # opened, closed, added to, cut, flipped

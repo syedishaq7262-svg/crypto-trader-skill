@@ -78,6 +78,19 @@ class Card(unittest.TestCase):
             self.assertNotIn("news", d)
             self.assertNotIn("macro", d)
 
+    def test_a_dead_calendar_costs_one_quick_try(self):
+        for mode in ("macro_down", "macro_ratelimit"):
+            with Session(mode=mode) as s:
+                code, out, err = s.run(*COIN, ["SOL", "--venue", "binance"])
+                self.assertEqual(code, 0, err)
+                self.assertIn("Macro      the calendar could not be read just now", out)
+                self.assertNotIn("Missing    macro", out)
+                asked = cc.HTTP.stats["by_host"]["nfs.faireconomy.media"]["requests"]
+                self.assertEqual(asked, 1, mode)                                  # asked once: no retries
+                code, out, err = s.run(*COIN, ["ETH", "--venue", "binance"])
+                self.assertIn("the calendar could not be read just now", out)
+                self.assertNotIn("nfs.faireconomy.media", cc.HTTP.stats["by_host"])   # remembered: not asked again
+
     def test_btc_card_has_no_btc_comparison(self):
         with Session() as s:
             code, out, err = s.run(*COIN, ["btc", "--venue", "bybit", "--json"])

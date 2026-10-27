@@ -50,12 +50,18 @@ code 0 when something is new, 1 when nothing is.
 | source / file | what |
 | --- | --- |
 | outlet RSS and Atom feeds | CoinDesk `https://www.coindesk.com/arc/outboundfeeds/rss/`, Cointelegraph `https://cointelegraph.com/rss`, Decrypt `https://decrypt.co/feed`, The Block `https://www.theblock.co/rss.xml`, CryptoSlate `https://cryptoslate.com/feed/`, Bitcoin Magazine `https://bitcoinmagazine.com/feed`, BeInCrypto `https://beincrypto.com/feed/`. `news_feeds` in the config replaces the list. Each is read at most once every 5 minutes |
-| Bybit announcements API | `GET /v5/announcements/index`, types `delistings` and `new_crypto`: public, no key. Read every 10 minutes at most |
+| Bybit announcements API | `GET /v5/announcements/index`, types `delistings` and `new_crypto`: public, no key. Read every 10 minutes at most. Stock and ETF ("TradFi") listings and promotions such as token splashes are left out |
 | economic calendar | the Forex Factory weekly feed (`nfs.faireconomy.media`): free and unofficial, covers the current week, read once an hour at most |
 | exchange data | 1-hour candles of each watched coin, for its move against its usual hour and day |
 | `crypto/plan.json`, `crypto/positions.json`, `crypto/entry.json`, `crypto/scout.json`, `crypto/watchlist.json` | which coins to watch, and the time limits a macro release could land inside |
 | `crypto/news.json` | everything from the last check, machine readable |
 | `crypto/state/news_seen.json` | what has been shown (kept 7 days), so each item shows once |
+
+News, the calendar and the notices are extras: each source gets one quick
+try (10 seconds), and a source that just failed is not asked again for 10
+minutes. A slow website never holds up a price, a plan or an order. When a
+source is down, the last good copy (up to 7 days old) is shown with its
+age, or the line says the source could not be read.
 
 ## How it reads a headline
 

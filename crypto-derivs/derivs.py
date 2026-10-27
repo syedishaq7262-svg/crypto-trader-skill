@@ -30,11 +30,21 @@ VENUE_NAMES = {"binance": "Binance", "bybit": "Bybit", "hyperliquid": "Hyperliqu
 
 
 def cross_venue():
-    """Predicted next funding on Binance, Bybit and Hyperliquid for every coin, from one public request."""
+    """Predicted next funding on Binance, Bybit and Hyperliquid for every coin, from one public request.
+    Hyperliquid also quotes coins it has delisted (at 0%): those numbers are dropped."""
+    hl = cc.Hyperliquid()
     try:
-        return cc.Hyperliquid().predicted_fundings()
+        pf = hl.predicted_fundings()
     except cc.CryptoError:
         return {}
+    try:
+        live = set(m["symbol"] for m in hl.markets())
+    except cc.CryptoError:
+        return pf
+    for name, d in pf.items():
+        if "hyperliquid" in d and name not in live:
+            d.pop("hyperliquid")
+    return pf
 
 
 def spread_row(coin, pf):
@@ -89,12 +99,13 @@ def radar(a, venue, cfg):
             spreads.append(sr)
     spreads.sort(key=lambda x: -x["spread"])
     aprs = [r["funding_apr"] for r in rows if r["funding_apr"] is not None]
-    top10 = rows[:10]
-    oi_moves = [r["oi_24h"] for r in top10 if r["oi_24h"] is not None]
+    top10 = [r for r in rows[:10] if r["oi_24h"] is not None and r.get("oi_usd")]
+    oi_then = sum(r["oi_usd"] / (1.0 + r["oi_24h"]) for r in top10 if r["oi_24h"] > -1.0)
+    oi_move = (sum(r["oi_usd"] for r in top10) / oi_then - 1.0) if oi_then else None    # by dollars, not an average of %
     data = {"venue": venue.name, "venue_label": venue.label, "as_of": cc.now_ms(), "as_of_utc": cc.fmt_utc(cc.now_ms()),
             "coins": len(rows), "left_out": why, "failed": failed,
             "avg_funding_apr": cc.mean(aprs), "median_funding_apr": cc.median(aprs),
-            "top10_oi_24h": cc.mean(oi_moves), "rows": rows, "spreads": spreads[:10],
+            "top10_oi_24h": oi_move, "rows": rows, "spreads": spreads[:10],
             "has_oi_history": venue.has_oi_history, "has_long_short": venue.has_long_short}
     if not a.no_write:
         cc.write_json(cc.wpath("derivs.json"), data)
@@ -117,7 +128,7 @@ def print_radar(d, a):
     tone = "normal" if avg is None or -0.05 < avg < 0.25 else ("hot" if avg >= 0.25 else "negative")
     line = "Market: median funding %s a year (%s)" % (_apr(avg), tone)
     if d["top10_oi_24h"] is not None:
-        line += "; open interest %s in 24h across the 10 busiest coins" % cc.fmt_pct(d["top10_oi_24h"], dp=1)
+        line += "; open interest %s in 24h across the 10 busiest coins, in dollars" % cc.fmt_pct(d["top10_oi_24h"], dp=1)
     cc.out(line + ".")
     if not d["has_oi_history"]:
         cc.out("This venue keeps no open-interest history, so 24h changes and long/short shares are blank.")
@@ -136,7 +147,7 @@ def print_radar(d, a):
             bits.append("%d%% of accounts long" % round(r["long_share"] * 100))
         bits.append("price %s" % cc.fmt_pct(r["change_24h"], dp=1))
         cc.out("  %-8s %-24s %s" % (r["coin"], r["crowding"], ", ".join(bits)))
-        cc.out("  %-8s %s" % ("", CROWD_READ[r["crowding"]]))
+        cc.out("  %-8s %s" % ("", cc.crowd_read(r["crowding"], r["long_share"])))
     cc.out("")
     cc.out("Price against open interest, 24h")
     any_flow = False
@@ -238,7 +249,7 @@ def coin(a, venue, cfg):
         parts = ["%s %s" % (VENUE_NAMES.get(v, v), _apr(x)) for v, x in sorted(sr["aprs"].items())]
         cc.out("Across venues (next funding, a year): %s." % ", ".join(parts))
     if crowd:
-        cc.out("Read: %s. %s" % (crowd, CROWD_READ[crowd]))
+        cc.out("Read: %s. %s" % (crowd, cc.crowd_read(crowd, pos.get("long_share"))))
     else:
         fl = data["flow"]
         cc.out("Read: %s." % ("%s (%s)" % (fl, FLOW_READ[fl]) if fl else "nothing unusual in funding or positioning"))
@@ -274,7 +285,7 @@ def print_regime(r, venue):
     if r.get("breadth") is not None:
         cc.out("Breadth  %d%% of the %d busiest coins are above their 20-day average." % (round(r["breadth"] * 100), r["breadth_n"]))
     if r.get("funding_apr") is not None:
-        cc.out("Funding  average %s a year across the 20 busiest coins." % _apr(r["funding_apr"]))
+        cc.out("Funding  median %s a year across the %d busiest coins." % (_apr(r["funding_apr"]), r.get("funding_n") or 20))
     if r.get("fng") is not None:
         fl = "Fear & Greed  %d (%s)" % (r["fng"], r["fng_label"])
         if r.get("fng_7d") is not None:

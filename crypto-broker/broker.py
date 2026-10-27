@@ -151,6 +151,11 @@ def open_position(o, fill, fee, at, paper, extra=None):
     return pos
 
 
+def signed_money(x):
+    """+$17.88 or -$1.44: a result, with its sign."""
+    return ("+" if x > 0 else "") + cc.fmt_money(x)
+
+
 def close_record(pos, price, fee_out, at, reason, funding=None):
     sg = cc.side_sign(pos["side"])
     funding = pos.get("funding_paid", 0.0) if funding is None else funding
@@ -518,7 +523,7 @@ def paper_sync(book, cfg, report):
         ev = close_record(p, price, fee_out, at, reason)
         report.append("%s %s closed at %s by the %s, %s: %s (%+.2fR)." % (
             p["coin"], p["side"], cc.fmt_price(price, p.get("tick")), reason, cc.fmt_local(at),
-            ("+" if ev["pnl_usd"] > 0 else "") + cc.fmt_money(ev["pnl_usd"]), ev["r"]))
+            signed_money(ev["pnl_usd"]), ev["r"]))
     book["positions"] = keep
 
 
@@ -677,7 +682,8 @@ def positions(a, cfg):
         mark = t.get("mark") or t["last"]
         sg = cc.side_sign(p["side"])
         upnl = sg * (mark - p["entry"]) * p["qty"] - p.get("fee_in", 0) - p.get("funding_paid", 0)
-        r_now = sg * (mark - p["entry"]) / abs(p["entry"] - p["stop"])
+        risk = p.get("risk_usd") or abs(p["entry"] - p["stop"]) * p["qty"]
+        r_now = upnl / risk if risk else 0.0          # after the fees and funding so far, like a close's R
         rows.append(dict(p, mark=mark, unrealized_usd=upnl, r_now=r_now, stop_away=abs(mark - p["stop"]) / mark,
                          target_away=abs(p["target"] - mark) / mark))
         if a.json:
@@ -685,7 +691,7 @@ def positions(a, cfg):
         P = lambda x: cc.fmt_price(x, p.get("tick"))
         cc.out("%s %s %s %s @ %s | mark %s | %s (%+.2fR) | %s" % (
             "PAPER" if p["paper"] else "LIVE", p["coin"], p["side"], cc.fmt_qty(p["qty"], p.get("step")), P(p["entry"]),
-            P(mark), cc.fmt_money(upnl), r_now, cc.fmt_local(p["opened_at"])))
+            P(mark), signed_money(upnl), r_now, cc.fmt_local(p["opened_at"])))
         cc.out("    stop %s (%s away), target %s (%s away), liquidation %s, out by %s" % (
             P(p["stop"]), cc.fmt_pct(abs(mark - p["stop"]) / mark, 2, False), P(p["target"]),
             cc.fmt_pct(abs(p["target"] - mark) / mark, 2, False), cc.fmt_liq(p.get("liq"), mark, p.get("tick")),
@@ -735,7 +741,8 @@ def close(a, cfg):
     ev = close_record(p, price, fee, cc.now_ms(), "manual")
     book["positions"] = [x for x in book["positions"] if x["id"] != p["id"]]
     save_book(book)
-    cc.out("Closed %s %s at %s: %s (%+.2fR)." % (p["coin"], p["side"], cc.fmt_price(price, p.get("tick")), cc.fmt_money(ev["pnl_usd"]), ev["r"]))
+    cc.out("Closed %s %s at %s: %s (%+.2fR)." % (p["coin"], p["side"], cc.fmt_price(price, p.get("tick")),
+                                                signed_money(ev["pnl_usd"]), ev["r"]))
     return 0
 
 

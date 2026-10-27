@@ -73,7 +73,8 @@ Flags: `--no-setups`, `--no-news`, `--venue`, `--now`, `--offline`,
   latest with its source, age and tags; or that none did, and how many
   feeds were read.
 - **Macro**: high-impact US releases in the next 24 hours (CPI, jobs, the
-  Fed), which can move every coin at once.
+  Fed), which can move every coin at once, or that the calendar could not
+  be read just now. It is an extra: one quick try, never a long wait.
 - **Setups now**: the scanner's single-coin setups that match right now.
 - **Notes**: plain warnings when they apply (new listing, thin volume,
   extreme funding, at the 24h high or low, a wild week, a wide spread,

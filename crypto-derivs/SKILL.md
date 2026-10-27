@@ -4,7 +4,7 @@ description: >-
   Derivatives Radar for crypto perpetuals: funding rates, open interest,
   long/short positioning, taker flow, basis, cross-venue funding (Binance vs
   Bybit vs Hyperliquid) and the overall market regime (BTC trend and
-  volatility, breadth, average funding, Fear & Greed). Flags crowded longs
+  volatility, breadth, median funding, Fear & Greed). Flags crowded longs
   (squeeze-down risk), crowded shorts (short-squeeze fuel), extreme funding,
   and reads price against open interest (new longs, short covering, new
   shorts, long unwinding). Writes crypto/derivs.json and crypto/regime.json.
@@ -43,7 +43,7 @@ year before a cross-venue gap is listed), `--venue`, `--now`, `--offline`,
 | file | what |
 | --- | --- |
 | `crypto/derivs.json` | radar rows: funding (per payment and a year), open interest and its 24h and 7d change, long share, taker ratio, crowding, flow, cross-venue spreads |
-| `crypto/regime.json` | BTC trend, 7d and 30d moves, realized volatility, breadth, average funding, Fear & Greed, a label and one line on what it means |
+| `crypto/regime.json` | BTC trend, 7d and 30d moves, realized volatility, breadth, median funding, Fear & Greed, a label and one line on what it means |
 
 ## How to read it
 
@@ -61,7 +61,9 @@ pay shorts. Negative: shorts pay longs.
   least 10%, at most 50% of accounts long: shorts are paying while new
   positions pile in. A push up can force them to buy.
 - *hot funding* (+60% a year or more) and *deeply negative funding* (-30%
-  or less) without the rest.
+  or less) without the rest. The read says whether most accounts sit on the
+  paying side too; when they do not, the payers are likely fewer and
+  bigger.
 
 **Flow** (price against open interest over 24h, moves of at least 1.5% and
 5%): new longs, short covering, new shorts, long unwinding, plus *shorts
@@ -72,10 +74,15 @@ new money is on the other side.
 on Binance, Bybit and Hyperliquid for every coin. A large gap is the raw
 material of a funding carry trade; the radar lists gaps of 20 points a year
 or more. It does not account for fees, transfer time or price risk.
+Hyperliquid still quotes coins it has delisted, at 0%: those are dropped.
+
+**The market line** gives the median funding across the radar's coins and
+the change in open interest across the 10 busiest, added up in dollars, so
+one small coin doubling its open interest cannot move it.
 
 **Regime**: BTC above a rising 20-day average or below a falling one,
 breadth (share of the 30 busiest coins above their own 20-day average),
-average funding and Fear & Greed give one label: Risk-on, Risk-off, Mixed,
+median funding and Fear & Greed give one label: Risk-on, Risk-off, Mixed,
 Overheated or Fearful, with one line on what it means for day trades. A
 rough read of conditions, never a forecast.
 
@@ -102,7 +109,7 @@ real data). The radar:
 
 ```
 Derivatives radar | Binance USD-M futures | 2026-10-21 15:15 UTC | 26 coins
-Market: median funding +4% a year (normal); open interest +0.3% in 24h across the 10 busiest coins.
+Market: median funding +4% a year (normal); open interest -2.0% in 24h across the 10 busiest coins, in dollars.
 
 Crowded trades
   FUNDX    crowded longs            funding +104% a year, open interest +27.4% in 24h, 74% of accounts long, price -0.4%

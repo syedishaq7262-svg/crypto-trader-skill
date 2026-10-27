@@ -14,6 +14,19 @@ _spec.loader.exec_module(fx)
 
 
 class RealResponses(unittest.TestCase):
+
+    def test_bybit_tradfi_contracts_are_left_out(self):
+        rows = [{"symbol": "SOXLUSDT", "contractType": "LinearPerpetual", "status": "Trading", "baseCoin": "SOXL",
+                 "quoteCoin": "USDT", "settleCoin": "USDT", "symbolType": "ETF", "marketRegion": "US"},
+                {"symbol": "XAGUSDT", "contractType": "LinearPerpetual", "status": "Trading", "baseCoin": "XAG",
+                 "quoteCoin": "USDT", "settleCoin": "USDT", "symbolType": "commodity", "marketRegion": ""},
+                {"symbol": "NVDAUSDT", "contractType": "LinearPerpetual", "status": "Trading", "baseCoin": "NVDA",
+                 "quoteCoin": "USDT", "settleCoin": "USDT", "symbolType": "stock"},
+                {"symbol": "PAXGUSDT", "contractType": "LinearPerpetual", "status": "Trading", "baseCoin": "PAXG",
+                 "quoteCoin": "USDT", "settleCoin": "USDT", "symbolType": "", "marketRegion": ""},
+                {"symbol": "SOLUSDT", "contractType": "LinearPerpetual", "status": "Trading", "baseCoin": "SOL",
+                 "quoteCoin": "USDT", "settleCoin": "USDT"}]
+        self.assertEqual([m["symbol"] for m in cc.Bybit.parse_markets(rows)], ["PAXGUSDT", "SOLUSDT"])
     def test_binance_klines(self):
         bars = cc.Binance.parse_bars(real("binance_swap_klines.json"))
         self.assertEqual(len(bars), 3)

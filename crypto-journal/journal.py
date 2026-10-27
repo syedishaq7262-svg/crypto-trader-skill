@@ -258,7 +258,8 @@ def print_report(trades, since, a):
         cc.out("Break-even at your average win and loss: %d%%. Your win rate is %s." % (round(be * 100), where))
     dd = "Max drawdown %s (-%.1fR)" % (cc.fmt_money(-s["max_dd_usd"]), s["max_dd_r"]) if s["max_dd_usd"] > 0 else "No drawdown"
     if s.get("dd_span"):
-        dd += ", %s to %s" % (cc.fmt_local(s["dd_span"][0], date=True).split(" ")[0], cc.fmt_local(s["dd_span"][1]).split(" ")[0])
+        d0, d1 = cc.fmt_local(s["dd_span"][0]).split(" ")[0], cc.fmt_local(s["dd_span"][1]).split(" ")[0]
+        dd += (", on %s" % d0) if d0 == d1 else (", %s to %s" % (d0, d1))
     cc.out("%s. Longest losing streak %d; now %d %s in a row." % (dd, s["longest_losing"], s["streak"], plural_streak(s)))
     if s["fees"] or s["funding"]:
         bits = ["fees %s" % cc.fmt_money(s["fees"])]

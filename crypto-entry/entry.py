@@ -331,7 +331,7 @@ def look_15m(res, setup, venue, m, sa, sides, now, fresh_after, t, P):
         close_t = b15[end - 1][T] + M15
         return scan.Ctx(m, t, [], [b for b in b1h if b[T] + HOUR <= close_t], b15=b15[:end])
 
-    keep = (lambda h: h["status"] == "fresh") if setup == "breakout" else None
+    keep = {"breakout": lambda h: h["status"] == "fresh", "trend": lambda h: h["status"] != "extended"}.get(setup)
     h, new = recent(scan.SETUP_FUNCS[setup], ctx_at, LOOKBACK[setup], sides, sa, fresh_after, keep)
     last = b15[-1][C]
     if h is not None:

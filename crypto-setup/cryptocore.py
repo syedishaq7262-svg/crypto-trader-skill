@@ -17,6 +17,7 @@ It never places an order and never asks for a key. Order signing lives in
 crypto-broker only.
 """
 
+import email.utils
 import gzip
 import hashlib
 import importlib.util
@@ -120,6 +121,19 @@ def now_ms():
 
 def pinned():
     return _PINNED_MS is not None
+
+
+EXCHANGE_HOSTS = ("fapi.binance.com", "api.bybit.com", "api.hyperliquid.xyz")
+
+
+def exchange_now_ms():
+    """'Now' on the exchanges' clock when this computer's clock runs ahead of it, so a bar the exchange is still
+    building is never read as closed. A clock that runs behind only delays the newest bar a little."""
+    now = now_ms()
+    skew = getattr(HTTP, "skew_ms", None)
+    if _PINNED_MS is not None or not skew or skew <= 1500:
+        return now
+    return now - int(skew)
 
 
 def utc_dt(ms):
@@ -469,6 +483,22 @@ class Http(object):
         self.stats = {"requests": 0, "bytes": 0, "seconds": 0.0, "retries": 0, "by_host": {}}
         self._lock = threading.Lock()
         self._buckets = {}
+        self.skew_ms = None          # this computer's clock minus the exchanges' (from their Date headers)
+
+    def _note_clock(self, host, rh):
+        """Learn how far this computer's clock runs ahead of the exchange's, from a response's Date header."""
+        if host not in EXCHANGE_HOSTS:
+            return
+        d = rh.get("Date") or rh.get("date")
+        if not d:
+            return
+        try:
+            server = email.utils.parsedate_to_datetime(d).timestamp() * 1000.0
+        except (TypeError, ValueError, IndexError, OverflowError):
+            return
+        skew = time.time() * 1000.0 - server       # the header is whole seconds, so this reads up to 1 s high
+        with self._lock:
+            self.skew_ms = skew if self.skew_ms is None else min(self.skew_ms, skew)
 
     # -- rate limiting
     def _take(self, host, weight):
@@ -500,14 +530,18 @@ class Http(object):
     def _fixture_path(self, root, host, k):
         return os.path.join(root, host, k + ".json.gz")
 
+    MAX_WAIT_S = 10.0          # a server that asks for a longer pause gets an answer now, not a frozen tool
+
     def request(self, method, url, params=None, body=None, headers=None, weight=1, raw=False,
-                query=None, data=None, errors="raise", retry=True, private=False):
+                query=None, data=None, errors="raise", retry=True, private=False, timeout=None, retries=None):
         """Returns parsed JSON (or text with raw=True). Raises CryptoError subclasses.
 
         Signed account calls (crypto-broker) pass the exact `query` string or body `data`
         they signed, `private=True` (never recorded, never answered offline), `retry=False`
         for anything that places or changes an order (a retried timeout could place it twice),
-        and errors="return" to get (status, body) back instead of an exception.
+        and errors="return" to get (status, body) back instead of an exception. Optional
+        sources (news feeds, the macro calendar) pass a short `timeout` and few `retries`,
+        so a slow website never holds up a market answer.
         """
         method = method.upper()
         host = urllib.parse.urlparse(url).netloc
@@ -534,11 +568,11 @@ class Http(object):
         if headers:
             hdrs.update(headers)
         attempt = 0
-        max_retries = self.retries if retry else 0
+        max_retries = (self.retries if retries is None else min(retries, self.retries)) if retry else 0
         while True:
             self._take(host, weight)
             t0 = time.time()
-            status, rh, payload, err = self._send(method, full, data, hdrs)
+            status, rh, payload, err = self._send(method, full, data, hdrs, timeout or self.timeout)
             dt = time.time() - t0
             with self._lock:
                 self.stats["requests"] += 1
@@ -561,7 +595,11 @@ class Http(object):
             elif err is None and status >= 500:
                 err = "HTTP %d" % status
             if err is None:
+                self._note_clock(host, rh)
                 break
+            if retry_after is not None and retry_after > self.MAX_WAIT_S and errors != "return":
+                raise RateLimited("%s asked us to wait %d seconds (too many requests). Try again after that."
+                                  % (host, round(retry_after)))
             if attempt >= max_retries:
                 if errors == "return" and status:
                     break
@@ -588,8 +626,9 @@ class Http(object):
                 json.dump(rec, fh)
         return self._finish(host, status, rh, payload, raw)
 
-    def _send(self, method, full, data, hdrs):
+    def _send(self, method, full, data, hdrs, timeout=None):
         """One attempt. Returns (status, headers, bytes, error-or-None)."""
+        timeout = timeout or self.timeout
         if self.transport is not None:
             try:
                 status, rh, payload = self.transport(method, full, data, hdrs)
@@ -602,7 +641,7 @@ class Http(object):
                 return 0, {}, b"", str(e) or "connection failed"
         req = urllib.request.Request(full, data=data, method=method, headers=hdrs)
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 payload = resp.read()
                 rh = dict(resp.headers.items())
                 status = resp.status
@@ -838,7 +877,7 @@ class Venue(object):
     def bars(self, symbol, interval, count, end_ms=None):
         """The last `count` CLOSED bars ending at end_ms (default now), oldest first."""
         step = interval_ms(interval)
-        end = now_ms() if end_ms is None else end_ms
+        end = exchange_now_ms() if end_ms is None else min(end_ms, exchange_now_ms())
         last_open = (end // step) * step - step   # the newest bar that has closed by `end`
         start = last_open - (count - 1) * step
         rows = self.fetch_bars(symbol, interval, start, last_open + step - 1)
@@ -851,7 +890,7 @@ class Venue(object):
     def bars_between(self, symbol, interval, start_ms, end_ms):
         """Closed bars whose open time is in [start_ms, end_ms], capped at now."""
         step = interval_ms(interval)
-        cap = (now_ms() // step) * step - step
+        cap = (exchange_now_ms() // step) * step - step
         last = min((end_ms // step) * step, cap)
         first = (start_ms // step) * step
         if last < first:
@@ -1076,6 +1115,9 @@ class Binance(Venue):
                 [(float(p), float(q)) for p, q in r.get("asks", [])])
 
 
+TRADFI_TYPES = ("stock", "etf", "commodity", "forex")    # Bybit's symbolType for contracts on traditional markets
+
+
 class Bybit(Venue):
     name = "bybit"
     label = "Bybit linear perpetuals"
@@ -1120,6 +1162,8 @@ class Bybit(Venue):
                 continue
             if s.get("isPreListing") in (True, "true"):
                 continue
+            if str(s.get("symbolType") or "").lower() in TRADFI_TYPES or s.get("marketRegion"):
+                continue                     # a stock, ETF, commodity or forex contract: not a 24/7 crypto market
             base = s.get("baseCoin", "")
             coin, mult = split_multiplier(base)
             pf = s.get("priceFilter") or {}
@@ -1626,9 +1670,23 @@ def positioning(venue, symbol):
 CROWD_READ = {
     "crowded longs": "Longs pay to hold while price goes nowhere. A drop can cascade through their stops (squeeze-down risk).",
     "crowded shorts": "Shorts pay to hold while open interest grows. A push up can force them to buy (short-squeeze fuel).",
-    "hot funding": "Holding a long costs a lot. The crowd is leaning long.",
-    "deeply negative funding": "Holding a short costs a lot. The crowd is leaning short.",
+    "hot funding": "Holding a long costs a lot: longs pay shorts at every funding.",
+    "deeply negative funding": "Holding a short costs a lot: shorts pay longs at every funding.",
 }
+
+
+def crowd_read(label, long_share=None):
+    """CROWD_READ's words, plus whether the accounts agree with what the funding says."""
+    words = CROWD_READ[label]
+    if label in ("hot funding", "deeply negative funding") and long_share is not None:
+        side, other = ("long", "short") if label == "hot funding" else ("short", "long")
+        share = long_share if side == "long" else 1.0 - long_share
+        if share >= 0.5:
+            words += " Most accounts are %s too (%d%%)." % (side, round(share * 100))
+        else:
+            words += " Yet most accounts are %s (%d%%), so the %ss are likely fewer and bigger." % (
+                other, round((1.0 - share) * 100), side)
+    return words
 FLOW_READ = {
     "new longs": "price up, open interest up",
     "shorts adding into a rise": "price up, open interest up, funding negative",
@@ -1739,7 +1797,8 @@ def market_regime(venue, cfg=None, breadth_n=30):
     out["breadth"] = (sum(1 for f in flags if f) / float(len(flags))) if flags else None
     out["breadth_n"] = len(flags)
     aprs = [annualize_funding(t["funding"], t.get("funding_hours")) for m, t in uni[:20] if t.get("funding") is not None]
-    out["funding_apr"] = mean(aprs)
+    out["funding_apr"] = median(aprs)          # one coin at -1,800% a year must not set the market's mood
+    out["funding_n"] = len(aprs)
     try:
         fg = fear_greed(8)
         out["fng"] = fg[0][1] if fg else None

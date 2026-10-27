@@ -4,6 +4,8 @@ import math
 import os
 import shutil
 import tempfile
+import socket
+import time
 import unittest
 
 from _load import cc, Session, WED
@@ -81,6 +83,65 @@ class Names(unittest.TestCase):
             self.assertTrue(cc.tz_known("Australia/Perth"))
         finally:
             cc.importlib.import_module = real
+
+    def test_a_long_retry_after_is_answered_at_once(self):
+        http = cc.Http()
+        calls = []
+
+        def transport(method, url, data, headers):
+            calls.append(url)
+            return 429, {"Retry-After": "300"}, "{}"
+        http.transport = transport
+        t0 = time.time()
+        with self.assertRaises(cc.RateLimited) as ctx:
+            http.request("GET", "https://api.example.com/x")
+        self.assertLess(time.time() - t0, 2.0)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("asked us to wait 300 seconds", str(ctx.exception))
+
+    def test_a_short_timeout_and_fewer_retries_per_call(self):
+        http = cc.Http()
+        calls = []
+
+        def transport(method, url, data, headers):
+            calls.append(url)
+            raise socket.timeout("timed out")
+        http.transport = transport
+        with self.assertRaises(cc.NetError):
+            http.request("GET", "https://slow.example.com/feed", timeout=1, retries=0)
+        self.assertEqual(len(calls), 1)
+        calls[:] = []
+        orig = time.sleep
+        time.sleep = lambda s: None
+        try:
+            with self.assertRaises(cc.NetError):
+                http.request("GET", "https://slow.example.com/feed", retries=1)
+        finally:
+            time.sleep = orig
+        self.assertEqual(len(calls), 2)
+
+    def test_a_clock_running_ahead_never_reads_a_forming_bar(self):
+        import email.utils as eu
+        saved = cc.HTTP
+        try:
+            cc.set_now(None)
+            cc.HTTP = http = cc.Http()
+
+            def transport(method, url, data, headers):     # the exchange's clock is 30 s behind this computer's
+                return 200, {"Date": eu.formatdate(time.time() - 30, usegmt=True)}, "{}"
+            http.transport = transport
+            http.request("GET", "https://fapi.binance.com/fapi/v1/time")
+            self.assertGreater(http.skew_ms, 29000)
+            self.assertLess(http.skew_ms, 32000)
+            self.assertAlmostEqual(cc.exchange_now_ms(), cc.now_ms() - http.skew_ms, delta=1500)
+            http.skew_ms = -27000                            # running behind: nothing to correct
+            self.assertAlmostEqual(cc.exchange_now_ms(), cc.now_ms(), delta=50)
+            http.skew_ms = 30000
+            cc.set_now(WED)                                  # a pinned clock is never adjusted
+            self.assertEqual(cc.exchange_now_ms(), cc.parse_when(WED))
+        finally:
+            cc.HTTP = saved
+            cc.set_now(None)
 
     def test_multipliers(self):
         self.assertEqual(cc.split_multiplier("1000PEPE"), ("PEPE", 1000))

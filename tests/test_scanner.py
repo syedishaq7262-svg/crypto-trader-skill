@@ -65,6 +65,20 @@ class PlantedSetups(unittest.TestCase):
             self.assertTrue(vs, venue)
             self.assertGreaterEqual(vs[0]["rvol"], 4.0)
 
+    def test_a_reclaim_far_past_the_average_is_extended(self):
+        from _load import load
+        scan = load(*SCAN)
+        with Session():
+            v = cc.get_venue("binance")
+            m = v.market("TRDX")
+            x = scan.Ctx(m, {}, v.bars(m["symbol"], "5m", 900), v.bars(m["symbol"], "1h", 260))
+            hits = scan.setup_trend(x, scan.args_from({}), ["long"])
+            self.assertEqual([h["status"] for h in hits], ["reclaimed"])
+            self.assertLessEqual(hits[0]["metrics"]["beyond_atr"], scan.TREND_MAX_ATR)
+            x.atr15 = x.atr15 / 50.0                       # the same close, now far past the average in ATR terms
+            hits = scan.setup_trend(x, scan.args_from({}), ["long"])
+            self.assertEqual([h["status"] for h in hits], ["extended"])
+
     def test_relative_strength(self):
         for venue, (_, _, _, hits) in self.results.items():
             rs = [h for h in hits if h["setup"] == "rs"]

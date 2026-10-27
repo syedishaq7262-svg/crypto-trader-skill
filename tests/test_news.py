@@ -93,6 +93,13 @@ class Tagging(unittest.TestCase):
         self.assertIn("regulatory", N.tags_of("Regulators Fine a Broker"))
         self.assertIn("ETF", N.tags_of("Record Inflows Into Funds"))
         self.assertNotIn("ETF", N.tags_of("Etf is not how anyone writes it"))
+        # headlines that once set off false alarms on real feeds
+        self.assertEqual(N.tags_of("Strategy pauses bitcoin buys, repurchases $205 million of preferred shares"), [])
+        self.assertEqual(N.tags_of("3 payment rules control Aave's native Bitcoin market, but only WBTC settles them"), [])
+        self.assertEqual(N.tags_of("Hong Kong names Nasdaq-listed Solana Company a strategic enterprise"), [])
+        self.assertIn("outage", N.tags_of("Binance pauses withdrawals on Solana amid congestion"))
+        self.assertIn("listing", N.tags_of("Bybit to list XYZ perpetual"))
+        self.assertIn("regulatory", N.tags_of("Exchange settles with SEC for $50 million"))
 
     def test_the_same_story_folds_into_one(self):
         base = cc.parse_when("2026-10-21 12:00")
@@ -166,6 +173,8 @@ class Brief(unittest.TestCase):
             self.assertIn("delisting  2h00m ago Delisting of THINXUSDT", out)
             self.assertIn("listing    5h00m ago New Listing: NEWXUSDT", out)
             self.assertNotIn("Old listing", out)                                         # 20 days old
+            self.assertNotIn("TradFi", out)                                              # a stock contract, not crypto
+            self.assertNotIn("Token Splash", out)                                        # a promotion, not a listing
 
     def test_one_source_down_never_sinks_the_rest(self):
         with Session(mode="bybit_geoblock") as s:

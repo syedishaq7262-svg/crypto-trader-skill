@@ -248,8 +248,13 @@ slippage and funding.
 
 **The data is free and unofficial.** Exchange APIs can lag, change or
 rate-limit you; the newsrooms' feeds and the macro calendar are unofficial
-too. The tools read closed candles, not every tick. Check anything that
-matters on the exchange before you act on it.
+too. The tools read closed candles, not every tick, by the exchange's clock
+even when your computer's runs ahead. Check anything that matters on the
+exchange before you act on it.
+
+**Crypto only.** Binance and Bybit now list stock, ETF, commodity and forex
+contracts next to crypto. The pack leaves them out: they follow their home
+market's hours, and everything here assumes a market that never closes.
 
 **Where you live matters.** Binance and Bybit refuse some countries, and
 some countries restrict crypto derivatives for retail traders. A blocked

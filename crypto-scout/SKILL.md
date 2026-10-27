@@ -126,25 +126,18 @@ shortened:
 Scout | Binance USD-M futures | 2026-10-21 15:15 UTC
 Regime: Risk-on. BTC trends up and most coins follow. Long breakouts have the wind behind them.
 41 setups live in the scan; 10 tested on each coin's own last 30 days, after fees, slippage and funding. 3 coiled squeezes with no side yet (FUNDX, BRKX, BRKD): /crypto-entry COIN --setup squeeze waits for the break.
-Left out, already failed or run: WIF short orb, SOL long orb, XRP long orb, APT long orb, ADA short orb, INJ long orb.
+Left out, already failed or run: WIF short orb, SOL long orb, XRP long orb, APT long orb, ADA short orb, INJ long orb, WIF long trend, BRKX long trend.
 Left out, opening-range breakouts past their 4h00m entry window (LINK long, BTC short, BONK short, DOGE short, SUI short, OP short and 6 more): a late entry is a different trade. For a fresh range: scout.py --session ny (the New York open, 1h45m ago).
 
-Worth watching (positive, not proven) (3)
+Worth watching (positive, not proven) (4)
  1. VOLX long, volume spike (spike 15:15 UTC)
      history +1.96R a trade over 3 trades, target first 3 of 3; random entries +0.00R; luck matches it 0.2% of the time (still clear after testing 10 setups at once)
      plan: entry 0.68892, stop 0.66998, target 0.72680 (2.0R), out within 24h; replays: leans toward the stop
- 2. TIA short, range breakout (fresh 15:15 UTC)
-     history +0.04R a trade over 16 trades, target first 6 of 16; random entries -0.23R; luck matches it 19% of the time
-     plan: entry 5.0083, stop 5.1027, target 4.8195 (2.0R), out within 24h; replays: close to break-even
-     note: a short in a Risk-on market
- 3. TRDX long, trend pullback (reclaimed 15:15 UTC)
-     history +0.61R a trade over 44 trades, target first 24 of 39; random entries +0.56R; luck matches it 40% of the time
+ 4. TRDX long, trend pullback (reclaimed 15:15 UTC)
+     history +0.63R a trade over 45 trades, target first 26 of 41; random entries +0.53R; luck matches it 33% of the time
      plan: entry 76.274, stop 75.223, target 78.376 (2.0R), out within 24h; replays: mostly out of time
 
-No edge on this coin lately (7)
- 4. ORBX long, trend pullback (reclaimed 15:15 UTC)
-     history -0.05R a trade over 24 trades, target first 7 of 20; random entries -0.12R; luck matches it 38% of the time
-     plan: entry 21.469, stop 21.001, target 22.405 (2.0R), out within 24h; replays: leans toward the stop
+No edge on this coin lately (6)
  6. ETH short, squeeze break (broke down 15:00 UTC)
      history -0.07R a trade over 3 trades, target first 1 of 3; random entries -0.30R; luck matches it 42% of the time
      plan: entry 3,435.04, stop 3,476.50, target 3,352.12 (2.0R), out within 24h; replays: leans toward the stop
@@ -155,8 +148,8 @@ Evidence, not a promise or advice. To take one further: scout.py pick N, then /c
 ```
 
 VOLX's three past trades all won, and random entries rarely do that, but
-three trades is not a record. TRDX made +0.61R a trade over 44 trades, yet
-random long entries on TRDX made +0.56R: the setup added little to what
+three trades is not a record. TRDX made +0.63R a trade over 45 trades, yet
+random long entries on TRDX made +0.53R: the setup added little to what
 simply being long earned. Both are worth watching, and neither is evidence.
 
 ## Rules

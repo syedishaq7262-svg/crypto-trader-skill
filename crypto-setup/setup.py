@@ -86,7 +86,7 @@ def doctor(a):
             if r["skew_s"] is not None:
                 extra += ", your clock is %+.1f s off" % r["skew_s"]
                 if abs(r["skew_s"]) > 1.0:
-                    extra += " (fix it before trading live: signed orders are refused past a few seconds)"
+                    extra += " (the pack allows for it, but set your computer to sync its clock)"
             cc.out("  %-24s ok       %s" % (r["label"], extra))
         else:
             cc.out("  %-24s %-8s %s" % (r["label"], r["status"], r["note"]))

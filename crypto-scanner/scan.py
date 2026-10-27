@@ -206,6 +206,9 @@ def setup_squeeze_any(x, a, sides):
     return setup_squeeze(x, a, sides)
 
 
+TREND_MAX_ATR = 2.0     # a reclaim that closes further than this from the 20 average is a chase, not a pullback entry
+
+
 def setup_trend(x, a, sides):
     """1h averages stacked in one direction, a 15m pullback to the 20 average, and a close back over it."""
     c1 = cc.closes(x.b1h)
@@ -224,9 +227,11 @@ def setup_trend(x, a, sides):
         low6 = min(w[L] for w in b[-7:])
         depth = 1.0 - low6 / top
         if touched and last[C] > e[-1] and last[C] > last[O] and depth >= a.min_pullback / 100.0:
-            out.append(hit(x, "trend", "long", last[C], e[-1], low6, last[T] + 900000, None, "reclaimed",
+            beyond = (last[C] - e[-1]) / x.atr15 if x.atr15 else 0.0
+            out.append(hit(x, "trend", "long", last[C], e[-1], low6, last[T] + 900000, None,
+                           "reclaimed" if beyond <= TREND_MAX_ATR else "extended",
                            {"ema20_1h": px(x.m, e20), "ema50_1h": px(x.m, e50), "ema200_1h": px(x.m, e200),
-                            "pullback_pct": round(depth, 5)},
+                            "pullback_pct": round(depth, 5), "beyond_atr": round(beyond, 2)},
                            "uptrend on 1h; 15m pulled back %.1f%% and closed back over its 20 average" % (depth * 100)))
     if "short" in sides and e20 < e50 < e200 and b[-1][C] < e50:
         touched = any(b[i][H] >= e[i] for i in recent)
@@ -234,9 +239,11 @@ def setup_trend(x, a, sides):
         high6 = max(w[H] for w in b[-7:])
         depth = high6 / bottom - 1.0
         if touched and last[C] < e[-1] and last[C] < last[O] and depth >= a.min_pullback / 100.0:
-            out.append(hit(x, "trend", "short", last[C], e[-1], high6, last[T] + 900000, None, "rejected",
+            beyond = (e[-1] - last[C]) / x.atr15 if x.atr15 else 0.0
+            out.append(hit(x, "trend", "short", last[C], e[-1], high6, last[T] + 900000, None,
+                           "rejected" if beyond <= TREND_MAX_ATR else "extended",
                            {"ema20_1h": px(x.m, e20), "ema50_1h": px(x.m, e50), "ema200_1h": px(x.m, e200),
-                            "pullback_pct": round(depth, 5)},
+                            "pullback_pct": round(depth, 5), "beyond_atr": round(beyond, 2)},
                            "downtrend on 1h; 15m bounced %.1f%% and closed back under its 20 average" % (depth * 100)))
     return out
 
@@ -548,8 +555,12 @@ def print_scan(d, venue, a):
                 cc.out(cc.table(tab, ["coin", "side", "1h close", "band", "middle band"], "llrrr"))
         elif s == "trend":
             tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"], h.get("tick")), _lvl(h, "level"), _lvl(h, "stop_ref"),
-                    cc.fmt_pct(h["metrics"]["pullback_pct"], plus=False)] for h in show]
-            cc.out(cc.table(tab, ["coin", "side", "15m close", "15m EMA20", "pullback extreme", "pullback"], "llrrrr"))
+                    cc.fmt_pct(h["metrics"]["pullback_pct"], plus=False), h["status"]] for h in show]
+            cc.out(cc.table(tab, ["coin", "side", "15m close", "15m EMA20", "pullback extreme", "pullback", "status"],
+                            "llrrrrl"))
+            if any(h["status"] == "extended" for h in show):
+                cc.out("  extended: the bar closed more than %g ATRs past its 20 average, a chase rather than a pullback entry"
+                       % TREND_MAX_ATR)
         elif s == "reversal":
             tab = [[h["coin"], h["side"], cc.fmt_price(h["trigger"], h.get("tick")),
                     "%.0f -> %.0f" % (h["metrics"].get("rsi_min", h["metrics"].get("rsi_max")), h["metrics"]["rsi_now"]),

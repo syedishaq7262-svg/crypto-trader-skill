@@ -57,7 +57,9 @@ says why).
 
 Every USDT-margined perpetual that is trading, minus stablecoins, minus
 coins listed under 14 days ago, minus coins with under $20M of 24h volume,
-minus anything in `exclude`. Busiest first, the top 150 (40 on Hyperliquid,
+minus anything in `exclude`. Stock, ETF, commodity and forex contracts that
+Binance and Bybit now list next to crypto are left out: they follow their
+home market's hours, and the setups here assume a market that never closes. Busiest first, the top 150 (40 on Hyperliquid,
 whose candle limit is tight). Coins priced per 1,000 (1000PEPE on Binance,
 kPEPE on Hyperliquid) are the same coin: `--symbols PEPE` finds them.
 
@@ -85,6 +87,8 @@ Each one uses closed candles only, never the bar still forming.
 4. **trend** 1-hour 20, 50 and 200 averages stacked in one direction and the
    price on the right side of the 50; a 15-minute pullback of at least 0.5%
    touched the 15-minute 20 average and the last bar closed back over it.
+   `extended` when that close is more than two 15-minute ATRs past the
+   average: a chase, not a pullback entry.
 5. **reversal** 1-hour RSI(14) reached 25 or below (75 or above) in the four
    hours before the last one, the last hour's RSI is back 5 points inside,
    and the last close turned.

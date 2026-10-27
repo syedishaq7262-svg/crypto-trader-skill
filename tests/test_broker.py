@@ -90,6 +90,16 @@ class Yes(unittest.TestCase):
 
 
 class Paper(unittest.TestCase):
+    def test_open_r_counts_costs_like_a_close(self):
+        with Session() as s:
+            o = ready_order(s)
+            code, out, err = place(s, o)
+            self.assertEqual(code, 0, err)
+            code, out, err = s.run(*BROKER, ["positions", "--json"])
+            row = json.loads(out)["positions"][0]
+            self.assertAlmostEqual(row["r_now"], row["unrealized_usd"] / row["risk_usd"])
+            self.assertEqual(row["r_now"] > 0, row["unrealized_usd"] > 0)          # never "-$0.53 (+0.04R)"
+
     def test_target_stop_and_time_limit_play_forward(self):
         with Session() as s:
             o = ready_order(s)

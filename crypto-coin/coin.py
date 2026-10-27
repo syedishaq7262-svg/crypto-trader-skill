@@ -201,6 +201,8 @@ def build(venue, text, cfg, with_setups=True, with_news=True):
                                for h in heads[:3]]}
     if got.get("macro") is not None:
         d["macro"] = [{"title": e["title"], "country": e["country"], "at": e["at"]} for e in got["macro"]]
+    elif "macro" in errors:
+        d["macro_error"] = errors.pop("macro")
     if got.get("notices"):
         d["notices"] = [n for n in got["notices"] if m["coin"] in (n.get("coins") or []) and now - n["at"] <= 14 * DAY]
     d["notes"] = notes_for(d, cfg)
@@ -322,7 +324,7 @@ def print_card(d):
             ol += "  |  %d%% of accounts long" % round(pos["long_share"] * 100)
         cc.out("Open int.  " + ol)
     if d.get("crowding"):
-        cc.out("           %s: %s" % (d["crowding"], cc.CROWD_READ[d["crowding"]]))
+        cc.out("           %s: %s" % (d["crowding"], cc.crowd_read(d["crowding"], pos.get("long_share"))))
     elif d.get("flow"):
         cc.out("           %s (%s)" % (d["flow"], cc.FLOW_READ[d["flow"]]))
     mk = []
@@ -357,6 +359,8 @@ def print_card(d):
         ev = ["US %s %s" % (e["title"], ("in %s" % cc.fmt_dur(e["at"] - now)) if e["at"] > now else
                             ("out %s ago" % cc.fmt_dur(now - e["at"]))) for e in d["macro"][:3]]
         cc.out("Macro      " + ("; ".join(ev) if ev else "no high-impact US release in the next 24h"))
+    elif d.get("macro_error"):
+        cc.out("Macro      the calendar could not be read just now (%s)" % d["macro_error"][:90])
     if d.get("setups"):
         cc.out("Setups now " + "; ".join("%s%s (%s)" % (SETUP_WORDS.get(h["setup"], h["setup"]),
                                                           (" " + h["side"]) if h["side"] in cc.SIDES else "", h["status"])

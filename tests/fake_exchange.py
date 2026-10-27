@@ -14,6 +14,8 @@ Failure switches (FAKE_EXCHANGE_MODE, comma separated):
   binance_geoblock  Binance answers HTTP 451 (as it does in the US)
   bybit_geoblock    Bybit answers HTTP 403 from CloudFront
   hyperliquid_down  Hyperliquid answers HTTP 502 to everything
+  macro_down        the macro calendar never answers (every request times out)
+  macro_ratelimit   the macro calendar answers HTTP 429 with Retry-After: 300
   flaky             the first call to each path fails with HTTP 503
   ratelimit         the first call to each path answers HTTP 429
   timeout           the first call to each path times out
@@ -685,6 +687,13 @@ def bybit(path, q):
                          "fundingInterval": 240 if c in FOUR_HOUR_FUNDING else 480, "isPreListing": False})
         rows.append({"symbol": "BTCPERP", "contractType": "LinearPerpetual", "status": "Trading", "baseCoin": "BTC",
                      "quoteCoin": "USDC", "settleCoin": "USDC"})
+        for sym, base, kind, region in (("SOXLUSDT", "SOXL", "ETF", "US"), ("XAGUSDT", "XAG", "commodity", ""),
+                                        ("SKHYNIXUSDT", "SKHYNIX", "stock", "KR")):   # TradFi contracts, as Bybit lists them
+            rows.append({"symbol": sym, "contractType": "LinearPerpetual", "status": "Trading", "baseCoin": base,
+                         "quoteCoin": "USDT", "settleCoin": "USDT", "symbolType": kind, "marketRegion": region,
+                         "launchTime": str(now - 90 * DAY), "priceFilter": {"tickSize": "0.01"},
+                         "lotSizeFilter": {"minOrderQty": "0.01", "qtyStep": "0.01", "minNotionalValue": "5"},
+                         "leverageFilter": {"maxLeverage": "25.00"}, "fundingInterval": 480})
         return bybit_ok({"category": "linear", "list": rows, "nextPageCursor": ""})
     if path == "/v5/market/tickers":
         rows = []
@@ -965,6 +974,10 @@ def announcements(q):
                      "startDateTimestamp": now - 5 * 3600000, "endDateTimestamp": now + 30 * DAY})
         rows.append({"title": "Old listing", "description": "", "type": {"title": "New Listings", "key": "new_crypto"},
                      "tags": [], "url": "", "dateTimestamp": now - 20 * DAY})
+        for title in ("New listing: Listing of ABCDUSDT on Bybit TradFi Perpetual on Oct 21, 2026, 10:00AM UTC",
+                      "ZZZ Token Splash: Grab a share of the 11000 ZZZ prize pool"):        # not crypto listings
+            rows.append({"title": title, "description": "", "type": {"title": "New Listings", "key": "new_crypto"},
+                         "tags": [], "url": "", "dateTimestamp": now - 3 * 3600000})
     return bybit_ok({"total": len(rows), "list": rows})
 
 
@@ -999,7 +1012,8 @@ WHALES = [
      [("BTC", 1, 9.0e5, 4, "cross", None, None), ("ETH", -1, 3.0e5, 3, "cross", None, 105),
       ("SOL", 1, 4.0e5, 5, "cross", 45, None)]),
     (4, "bonk-lord", 7.5e5, (3e3, 30e3, 4.2e5, 6.0e5), 1.10,
-     [("BONK", 1, 2.2e5, 3, "isolated", None, None), ("xyz:XYZ100", 1, 1.0e5, 2, "isolated", None, None)]),
+     [("BONK", 1, 2.2e5, 3, "isolated", None, None), ("xyz:XYZ100", 1, 1.0e5, 2, "isolated", None, None),
+      ("BTC", 1, 3.2, 40, "cross", None, None)]),                    # a $3.20 leftover, not a view
     (5, None, 2.6e5, (1e3, 12e3, 1.5e5, 9.0e4), 0.70,
      [("BTC", 1, 1.5e5, 20, "isolated", None, None)]),
     (6, "too-small", 4.0e4, (2e3, 9e3, 9.0e4, 1.0e5), 2.40, [("BTC", -1, 1.0e5, 3, "cross", None, None)]),
@@ -1084,6 +1098,10 @@ def handle(method, url, data, headers):
         return 451, {}, json.dumps({"code": 0, "msg": "Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms."})
     if "bybit" in host and "bybit_geoblock" in modes:
         return 403, {}, "<HTML><BODY>The Amazon CloudFront distribution is configured to block access from your country.</BODY></HTML>"
+    if host == "nfs.faireconomy.media" and "macro_down" in modes:
+        raise socket.timeout("timed out")
+    if host == "nfs.faireconomy.media" and "macro_ratelimit" in modes:
+        return 429, {"Retry-After": "300"}, "<html><body>Request Denied: rate limit</body></html>"
     if "hyperliquid" in host and "hyperliquid_down" in modes:
         return 502, {}, "<html><body>502 Bad Gateway</body></html>"
     if first and "flaky" in modes:

@@ -64,8 +64,11 @@ location, not a fault in the pack. Never suggest a VPN to get around it.
    run `init` and tell them the money settings it printed. Ask them for
    their real account size and the most they will lose on one trade and in
    one day, then edit those keys in `crypto/config.json` for them.
-3. If the clock is more than a second off, tell them: signed live orders are
-   refused when the clock drifts. Paper trading does not care.
+3. If the clock is more than a second off, suggest syncing it: on Windows,
+   Settings > Time & language > Date & time > Sync now; elsewhere, turn on
+   setting the time automatically. The pack allows for the difference: the
+   broker signs orders by the exchange's clock, and the market tools read
+   candles by it.
 4. If the display time zone line says `unknown`, the computer has no time
    zone database for that name: suggest an offset such as `"+11:00"` in
    `display_tz` instead.

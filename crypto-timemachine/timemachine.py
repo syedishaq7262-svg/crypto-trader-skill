@@ -399,7 +399,7 @@ def history_events(scan, setup, m, bars, side):
                 k = bisect.bisect_right(t1h, now_t - cc.HOUR_MS)
                 x = scan.Ctx(m, {}, [], b1h[max(0, k - 260):k], b15=b15[max(0, i - 199):i + 1])
                 for h in func(x, a, [side]):
-                    if name == "breakout" and h.get("status") != "fresh":
+                    if (name == "breakout" and h.get("status") != "fresh") or h.get("status") == "extended":
                         continue
                     events.append(dict(h))
         elif name == "reversal":

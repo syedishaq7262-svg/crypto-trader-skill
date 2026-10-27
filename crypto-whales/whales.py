@@ -34,6 +34,7 @@ LEADERBOARD_URL = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard"
 INFO_URL = "https://api.hyperliquid.xyz/info"
 BOARD_CACHE_MS = 6 * HOUR
 STATE_CACHE_MS = 2 * MIN
+MIN_POSITION_USD = 10000.0     # smaller positions are leftovers, not a whale's view
 KEEP_ROWS = 3000
 WINDOWS = ("day", "week", "month", "allTime")
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
@@ -217,7 +218,7 @@ def holders(a, coin):
             failed += 1
             continue
         for p in st["positions"]:
-            if p["coin"] == coin:
+            if p["coin"] == coin and p["notional"] >= MIN_POSITION_USD:
                 held.append(dict(p, trader=who(r), address=r["address"], account=st["account"], rank=top.index(r) + 1))
     return top, held, failed, at, note, venue
 

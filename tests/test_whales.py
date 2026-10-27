@@ -63,6 +63,7 @@ class Commands(unittest.TestCase):
             code, out, err = s.run(*WH, ["coin", "BTC"])
             self.assertEqual(code, 0, err)
             self.assertIn("4 of 12 hold it: 3 long ($5.2M), 1 short ($2.0M). By size, 72% long.", out)
+            self.assertNotIn("bonk-lord", out)                                 # its $3.20 of BTC is a leftover
             self.assertIn("4 of 4 are in profit on it", out)
             d = cc.read_json(s.path("whales.json"))
             self.assertEqual(len(d["holders"]), 4)
@@ -79,7 +80,8 @@ class Commands(unittest.TestCase):
             self.assertIn("40 hex characters", err)
             code, out, err = s.run(*WH, ["wallet", FX.whale_address(4), "--json"])
             d = json.loads(out)
-            self.assertEqual([p["coin"] for p in d["positions"]], ["BONK"])        # the HIP-3 market is left out
+            self.assertEqual([p["coin"] for p in d["positions"]], ["BONK", "BTC"])  # the HIP-3 market is left out;
+                                                                                   # one wallet's view shows even dust
             at("2026-10-21 18:00")
             code, out, err = s.run(*WH, ["wallet", FX.whale_address(3)])
             self.assertIn("SOL   long", out)
