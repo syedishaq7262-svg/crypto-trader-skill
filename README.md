@@ -157,6 +157,7 @@ python3 crypto-risk/check.py                            # PASS / BLOCK per order
 python3 crypto-broker/broker.py ticket                  # the ticket, READY or not
 python3 crypto-alerts/alerts.py add --from-plan         # stop, target, time limit
 python3 crypto-journal/journal.py                       # how it is going, honestly
+python3 tools/backtest.py                               # every setup replayed on the last 90 days, walk-forward
 ```
 
 The market tools take `--venue binance|bybit|hyperliquid`, and most take
@@ -290,7 +291,7 @@ crypto-risk/         SKILL.md, check.py
 crypto-broker/       SKILL.md, broker.py, exchanges.py
 crypto-alerts/       SKILL.md, alerts.py
 crypto-journal/      SKILL.md, journal.py
-tools/               live_check.py: every skill against the real exchanges
+tools/               live_check.py: every skill against the real exchanges; backtest.py: the walk-forward backtest
 tests/               unittest suite, a fake exchange, real recorded responses
 ```
 

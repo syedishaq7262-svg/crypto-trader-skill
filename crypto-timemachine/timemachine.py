@@ -17,6 +17,7 @@ A simulation built from the recent past, not a prediction.
 
 import argparse
 import bisect
+import json
 import importlib.util
 import math
 import os
@@ -363,15 +364,39 @@ def simulate_real(bars, i0, side, entry, stop, target, n_steps):
 
 def history_events(scan, setup, m, bars, side):
     """Every past moment the plan's setup rule fired, using the scanner's own code on the bars of the time."""
-    name = setup["name"]
-    a = scan.args_from(setup.get("params"))
-    events = []
+    return history_events_many(scan, [("plan", setup, side)], m, bars)["plan"]
+
+
+def history_events_many(scan, specs, m, bars):
+    """{key: events} for each (key, setup, side) in specs: every past moment that rule fired, by the scanner's
+    own code on the bars of the time (closed bars only, never a later one). One pass over each time frame
+    serves every rule that reads it, and each rule runs once for both sides."""
+    out = dict((key, []) for key, _, _ in specs)
     times = [b[T] for b in bars]
+    if not times:
+        return out
+    groups = {}             # (setup name, its params) -> (args, {side: key})
+    for key, setup, side in specs:
+        name = setup["name"]
+        params = setup.get("params") or {}
+        gk = (name, json.dumps(params, sort_keys=True, default=str))
+        if gk not in groups:
+            groups[gk] = (scan.args_from(params), {})
+        groups[gk][1][side] = key
+
+    def collect(name, func, x, a, keys, keep=None):
+        for h in func(x, a, sorted(keys)):
+            if keep is not None and not keep(h):
+                continue
+            k = keys.get(h["side"])
+            if k is not None:
+                out[k].append(dict(h))
+
     saved_now = cc.now_ms() if cc.pinned() else None
     try:
-        if name == "orb":
-            if not times:
-                return events
+        for (name, _), (a, keys) in groups.items():
+            if name != "orb":
+                continue
             d0 = cc.utc_dt(times[0])
             d1 = cc.utc_dt(times[-1])
             day = cc.datetime(d0.year, d0.month, d0.day, tzinfo=cc.timezone.utc)
@@ -387,37 +412,34 @@ def history_events(scan, setup, m, bars, side):
                 i1 = bisect.bisect_left(times, win_end)
                 x = scan.Ctx(m, {}, bars[i0:i1], [])
                 cc.set_now(win_end)
-                for h in scan.setup_orb(x, a, [side]):
-                    events.append(dict(h))
-        elif name in ("breakout", "volume", "trend"):
+                collect(name, scan.setup_orb, x, a, keys)
+        fifteen = [(name, a, keys) for (name, _), (a, keys) in groups.items() if name in ("breakout", "volume", "trend")]
+        if fifteen:
             b15 = cc.resample(bars, "15m")
             b1h = cc.resample(bars, "1h")
             t1h = [b[T] for b in b1h]
-            func = scan.SETUP_FUNCS[name]
             for i in range(120, len(b15)):
                 now_t = b15[i][T] + 900000
                 k = bisect.bisect_right(t1h, now_t - cc.HOUR_MS)
                 x = scan.Ctx(m, {}, [], b1h[max(0, k - 260):k], b15=b15[max(0, i - 199):i + 1])
-                for h in func(x, a, [side]):
-                    if (name == "breakout" and h.get("status") != "fresh") or h.get("status") == "extended":
-                        continue
-                    events.append(dict(h))
-        elif name == "reversal":
+                for name, a, keys in fifteen:
+                    keep = ((lambda h: h.get("status") == "fresh") if name == "breakout" else
+                            (lambda h: h.get("status") != "extended"))
+                    collect(name, scan.SETUP_FUNCS[name], x, a, keys, keep)
+        hourly = [(name, a, keys) for (name, _), (a, keys) in groups.items()
+                  if name == "reversal" or (name == "squeeze" and hasattr(scan, "setup_squeeze_break"))]
+        if hourly:
             b1h = cc.resample(bars, "1h")
-            for k in range(40, len(b1h)):
-                x = scan.Ctx(m, {}, [], b1h[max(0, k - 259):k + 1], b15=[])
-                for h in scan.setup_reversal(x, a, [side]):
-                    events.append(dict(h))
-        elif name == "squeeze" and hasattr(scan, "setup_squeeze_break"):
-            b1h = cc.resample(bars, "1h")
-            for k in range(250, len(b1h)):
-                x = scan.Ctx(m, {}, [], b1h[max(0, k - 749):k + 1], b15=[])
-                for h in scan.setup_squeeze_break(x, a, [side]):
-                    events.append(dict(h))
+            for name, a, keys in hourly:
+                first, span, func = (40, 260, scan.setup_reversal) if name == "reversal" else (250, 750, scan.setup_squeeze_break)
+                for k in range(first, len(b1h)):
+                    x = scan.Ctx(m, {}, [], b1h[max(0, k - span + 1):k + 1], b15=[])
+                    collect(name, func, x, a, keys)
     finally:
         cc.set_now(saved_now)
-    events.sort(key=lambda e: e["at"])
-    return events
+    for k in out:
+        out[k].sort(key=lambda e: e["at"])
+    return out
 
 
 def stop_for_event(plan, ev, entry):
@@ -446,7 +468,9 @@ def atr5_series(bars, n=14):
     return cc.atr(bars, n)
 
 
-def run_history(scan, plan, m, bars, funding, costs, n_steps):
+def run_history(scan, plan, m, bars, funding, costs, n_steps, events=None):
+    """The plan's setup rule re-run on the past, one trade at a time, each played out bar by bar after costs.
+    `events` (from history_events_many) skips finding the setups again."""
     setup = plan.get("setup") or {}
     name = setup.get("name")
     res = {"setup": name, "events": 0, "trades": [], "skipped": 0, "unfinished": 0, "overlap": 0}
@@ -463,7 +487,7 @@ def run_history(scan, plan, m, bars, funding, costs, n_steps):
         return res
     side = plan["side"]
     sg = cc.side_sign(side)
-    events = history_events(scan, setup, plan_market(plan), bars, side)
+    events = history_events(scan, setup, plan_market(plan), bars, side) if events is None else list(events)
     res["events"] = len(events)
     b15 = cc.resample(bars, "15m")
     a15 = cc.atr(b15, 14)

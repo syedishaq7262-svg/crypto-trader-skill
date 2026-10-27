@@ -112,11 +112,21 @@ class Repo(unittest.TestCase):
                 self.assertNotRegex(src, r"(?<![\w.])(list|dict|tuple|set)\[[A-Za-z]", "%s/%s" % (s, f))
 
     def test_standard_library_only(self):
+        import importlib.util
         import sys
-        allowed = set(getattr(sys, "stdlib_module_names", ())) | set((
-            "argparse ast atexit base64 bisect collections concurrent contextlib datetime email gzip hashlib hmac html importlib io json "
-            "math os platform random re shutil socket ssl statistics sys tempfile threading time traceback urllib uuid xml zipfile").split())
-        allowed.add("cryptocore")
+        import sysconfig
+        known = set(getattr(sys, "stdlib_module_names", ()))
+        stdlib = os.path.normcase(os.path.realpath(sysconfig.get_paths()["stdlib"]))
+
+        def in_stdlib(n):                     # Python before 3.10 has no list: ask where the module lives
+            if n in known or n in sys.builtin_module_names:
+                return True
+            spec = importlib.util.find_spec(n)
+            origin = getattr(spec, "origin", None) or ""
+            if origin in ("built-in", "frozen"):
+                return True
+            path = os.path.normcase(os.path.realpath(origin))
+            return path.startswith(stdlib) and "site-packages" not in path and "dist-packages" not in path
         for s in SKILLS + ["tools"]:
             folder = os.path.join(ROOT, s)
             for f in os.listdir(folder):
@@ -131,7 +141,7 @@ class Repo(unittest.TestCase):
                     elif isinstance(node, ast.ImportFrom) and node.level == 0:
                         names = [node.module.split(".")[0]]
                     for n in names:
-                        self.assertIn(n, allowed, "%s/%s imports %s" % (s, f, n))
+                        self.assertTrue(n == "cryptocore" or in_stdlib(n), "%s/%s imports %s" % (s, f, n))
 
     def test_no_em_dashes(self):
         for path in text_files():
