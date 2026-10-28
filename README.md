@@ -1,6 +1,65 @@
 # The Crypto Trader skill
 
-16 Claude skills for crypto day trading: find what is worth a look today, get the full picture of any coin in one card, plan every exit before you enter, replay the trade 10,000 times, and never place an order without your yes.
+**16 Claude skills for crypto day trading. We backtested their setups on
+37,401 trades, published every trade, and none of the setups showed an edge
+after costs.**
+
+[![tests](https://github.com/syedishaq7262-svg/crypto-trader-skill/actions/workflows/tests.yml/badge.svg)](https://github.com/syedishaq7262-svg/crypto-trader-skill/actions/workflows/tests.yml)
+[![release](https://img.shields.io/github/v/release/syedishaq7262-svg/crypto-trader-skill?color=2a78d6)](https://github.com/syedishaq7262-svg/crypto-trader-skill/releases)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-2a78d6)](#install)
+[![no dependencies](https://img.shields.io/badge/dependencies-none-2a78d6)](#install)
+[![MIT](https://img.shields.io/badge/license-MIT-2a78d6)](LICENSE)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/backtest-dark.svg">
+  <img src="docs/backtest-light.svg" width="840" alt="Average trade before and after costs for each of the seven setups. Before costs they ran from -0.05R to +0.07R a trade; after costs every one was below zero, from -0.08R for squeeze breaks to -0.39R for the opening range of the UTC day. All 37,401 trades: +0.03R a trade before costs, -0.17R a trade after.">
+</picture>
+
+Before fees, slippage and funding, the setups came out about even: +0.03R a
+trade, where 1R is the amount at risk. After them, every setup lost: -0.17R
+a trade across all of them, and the best of the fourteen setups and sides,
+squeeze-break longs, only broke even. Most trading tools show you the wins.
+This pack shows each setup's record next to the setup, every time, blocks
+trades whose stop is too tight for the coin's costs, and leaves the decision
+to you.
+
+Install in Claude Code, two lines:
+
+```
+/plugin marketplace add syedishaq7262-svg/crypto-trader-skill
+/plugin install crypto-trader-skill@crypto-trader-skill
+```
+
+Then ask: "what should I trade today?", "tell me about SOL", "plan a long on
+ETH". Paper trading is the default, and no order goes through until you type
+yes for that exact order.
+
+## What it does
+
+One skill scans every liquid perpetual for seven setups. Another puts
+today's setups next to their records: how each rule did over the 37,401
+backtested trades and on its own coin lately, after fees, slippage and
+funding, and it says on every board that none has shown an edge. Ask about
+any coin and you get one clean card: trend, levels, liquidity, funding, open
+interest, the latest headline and the next CPI print. The Time Machine
+replays a planned trade 10,000 times from the coin's own recent candles,
+re-runs the same setup on its last 30 days, and tests it against random
+entries before you risk a dollar. The rest plan the exit before the entry,
+size the position to your max loss, check where liquidation sits, run every
+order past your limits, and keep your journal.
+
+The backtest is walk-forward on real Binance prices with fake money: 27,566
+trades over 90 days, then 9,835 more over the 90 days before, as a check on
+data the first run never saw. The full results are
+[below](#backtest-27566-trades-on-real-past-prices), and every trade is in
+[`backtest/`](backtest/).
+
+Nothing in this pack can place an order on its own. Paper trading is the
+default, and it is not a testnet: it fills at live prices against the real
+order book and plays your stop and target out on real 1-minute candles. A
+live order needs `"paper": false` in your config, the `--live` flag, your own
+exchange keys in environment variables, a passing risk check from the last
+15 minutes, and your typed yes for that exact order.
 
 Free, MIT, no signup. No API key for anything except a live order. The tools
 are plain Python (standard library only) that read free public data: Binance
@@ -8,43 +67,16 @@ USD-M futures, Bybit and Hyperliquid market data, seven crypto newsrooms'
 RSS feeds, a US macro calendar, Bybit's listing notices, the Fear & Greed
 index and Hyperliquid's public leaderboard.
 
-One scans every liquid perpetual for setups. Another puts today's setups
-next to their records: how each rule did over 37,401 backtested trades and
-on its own coin lately, after fees, slippage and funding. None has shown an
-edge after costs, and it says so on every board. Ask about any coin and
-you get one clean card: trend, levels, liquidity, funding, open interest,
-the latest headline and the next CPI print. And the Time Machine replays a
-planned trade 10,000 times from the coin's own recent candles, re-runs the
-same setup on its last 30 days, and tests it against random entries before
-you risk a dollar.
-
-Every setup with a stop was also backtested walk-forward on real Binance
-prices with fake money: 27,566 trades over 90 days, then 9,835 more over
-the 90 days before, as a check on data the first run never saw. The results
-are [below](#backtest-27566-trades-on-real-past-prices), losses included,
-and the pack shows each setup's record wherever it shows the setup.
-
-No trade goes through until you say yes. Nothing in this pack can place an
-order on its own. Paper trading is the default, and it is not a testnet: it
-fills at live prices against the real order book and plays your stop and
-target out on real 1-minute candles.
-
 > **Trading stocks?** This pack is the crypto counterpart of Jake
 > Schincariol's [day-trader-skill](https://github.com/Jakeschincariol/day-trader-skill),
 > eleven skills for US stocks.
 
 ## Install
 
-In Claude Code, as a plugin:
-
-```
-/plugin marketplace add syedishaq7262-svg/crypto-trader-skill
-/plugin install crypto-trader-skill@crypto-trader-skill
-```
-
-Claude Code namespaces plugin skills, so installed as a plugin they show up as
-`/crypto-trader-skill:crypto-scout` and so on. Copy the folders instead if you
-want plain `/crypto-scout`:
+The two lines at the top install the pack as a Claude Code plugin. Claude
+Code namespaces plugin skills, so they show up as
+`/crypto-trader-skill:crypto-scout` and so on. Copy the folders instead if
+you want plain `/crypto-scout`:
 
 ```bash
 git clone https://github.com/syedishaq7262-svg/crypto-trader-skill.git
@@ -266,9 +298,8 @@ busiest coins traded through all of it: 9,835 trades, in
   overall and worse in the second half, and with it the two rules together
   lost 0.14R a trade. On the same 14 coins it had helped from August to
   October, so the coins are not the reason: a setup's last 30 days on a coin
-  is not a reliable guide to its next trade. The Scout ranks by that record,
-  so read its board as what each rule did on each coin lately, not as a
-  forecast.
+  is not a reliable guide to its next trade. The Scout ranked by that
+  record, so it no longer does: see below.
 
 What the pack does with it:
 
@@ -469,7 +500,8 @@ crypto-risk/         SKILL.md, check.py
 crypto-broker/       SKILL.md, broker.py, exchanges.py
 crypto-alerts/       SKILL.md, alerts.py
 crypto-journal/      SKILL.md, journal.py
-tools/               live_check.py: every skill against the real exchanges; backtest.py: the walk-forward backtest
+tools/               live_check.py: every skill against the real exchanges; backtest.py: the walk-forward backtest; chart.py: the chart at the top, drawn from the trades
+docs/                the chart at the top, light and dark, and the card shown when the repo is shared
 backtest/            the published backtests: both runs' reports and trades (CSV, gzipped), the checks and pooled reports
 tests/               unittest suite, a fake exchange, real recorded responses
 ```

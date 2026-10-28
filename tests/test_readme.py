@@ -1,6 +1,8 @@
 """The README's worked example: the same chain on the test market, and every number it quotes."""
 
+import contextlib
 import csv
+import glob
 import gzip
 import io
 import os
@@ -170,6 +172,56 @@ class ReadmeBacktest(unittest.TestCase):
                                                     sum(float(x["r_before_costs"]) for x in g) / len(g),
                                                     sum(float(x["r_after_costs"]) for x in g) / len(g))
             self.assertIn(line, sec)
+
+
+class ReadmeChart(unittest.TestCase):
+    """The chart at the top of the README is drawn from the published trades, and the words around it are its numbers."""
+
+    def chart(self):
+        from _load import load
+        return load("tools", "chart")
+
+    def test_the_chart_on_disk_is_the_trades(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = self.chart().main(["--check"])
+        self.assertEqual(code, 0, out.getvalue())
+
+    def test_the_words_are_the_chart(self):
+        c = self.chart()
+        s = c.summarise(c.read_trades())
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as fh:
+            top = fh.read().split("## The sixteen")[0]
+        for name in ("docs/backtest-dark.svg", "docs/backtest-light.svg"):
+            self.assertIn(name, top)
+            self.assertTrue(os.path.isfile(os.path.join(ROOT, name)), name)
+        self.assertEqual(s["all"]["n"], 37401)
+        self.assertIn("37,401", top)
+        self.assertIn("about even: %+.2fR a\ntrade" % s["all"]["before"], top)
+        self.assertIn("every setup lost: %+.2fR" % s["all"]["after"], top)
+        self.assertTrue(abs(s["all"]["before"]) < 0.05)
+        self.assertTrue(all(r["after"] < 0 for r in s["rows"]), "a setup made money after costs: the words are wrong")
+        self.assertEqual(c.title(s), "Before costs, about even. After costs, every setup lost.")
+        alt = re.search(r'<img src="docs/backtest-light.svg"[^>]* alt="([^"]+)"', top).group(1)
+        before = sorted(r["before"] for r in s["rows"])
+        after = sorted(r["after"] for r in s["rows"])
+        self.assertIn("from %+.2fR to %+.2fR a trade" % (before[0], before[-1]), alt)
+        self.assertIn("from %+.2fR for squeeze breaks to %+.2fR" % (after[-1], after[0]), alt)
+        self.assertEqual(s["rows"][0]["label"], "Squeeze break")
+
+    def test_the_best_side_broke_even(self):
+        with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as fh:
+            top = fh.read().split("## The sixteen")[0]
+        sides = {}
+        for path in sorted(glob.glob(os.path.join(ROOT, "backtest", "*-trades.csv.gz"))):
+            with gzip.open(path, "rt", encoding="utf-8", newline="") as fh:
+                for row in csv.DictReader(fh):
+                    sides.setdefault((row["setup"], row["side"]), []).append(float(row["r_after_costs"]))
+        self.assertEqual(len(sides), 14)
+        best = max(sides, key=lambda k: sum(sides[k]) / len(sides[k]))
+        self.assertEqual(best, ("squeeze", "long"))
+        self.assertEqual("%.2f" % abs(sum(sides[best]) / len(sides[best])), "0.00")
+        self.assertIn("the best of the fourteen setups and sides,\nsqueeze-break longs, only broke even", top)
 
 
 if __name__ == "__main__":

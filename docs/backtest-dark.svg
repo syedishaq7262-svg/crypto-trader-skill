@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="510" viewBox="0 0 840 510" role="img" aria-labelledby="title desc">
+<title id="title">Before costs, about even. After costs, every setup lost.</title>
+<desc id="desc">Average result a trade in R, before and after costs, over 37,401 walk-forward trades on Binance, 30 Apr to 27 Oct 2026. All setups: +0.03R before costs, −0.17R after, 37,401 trades; Squeeze break: +0.07R before costs, −0.08R after, 1,885 trades; RSI reversal: −0.03R before costs, −0.11R after, 1,278 trades; Volume spike: +0.04R before costs, −0.11R after, 9,327 trades; Range breakout: +0.03R before costs, −0.16R after, 7,987 trades; Trend pullback: +0.03R before costs, −0.17R after, 9,353 trades; Opening range, New York: +0.06R before costs, −0.17R after, 3,254 trades; Opening range, UTC day: −0.05R before costs, −0.39R after, 4,317 trades.</desc>
+<rect x="0.5" y="0.5" width="839" height="509" rx="10" fill="#1a1a19" stroke="#2c2c2a"/>
+<g font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<text x="28" y="42" font-size="20" font-weight="600" fill="#f0efec">Before costs, about even. After costs, every setup lost.</text>
+<text x="28" y="67" font-size="13.5" fill="#c3c2b7">Average result a trade, in R: 1R is the amount at risk.</text>
+<text x="28" y="87" font-size="13.5" fill="#c3c2b7">37,401 walk-forward trades on Binance perpetuals with fake money, 30 Apr to 27 Oct 2026.</text>
+<circle cx="34" cy="118" r="5.5" fill="#898781"/>
+<text x="46" y="122.5" font-size="13" fill="#c3c2b7">before fees, slippage and funding</text>
+<circle cx="318" cy="118" r="5.5" fill="#3987e5"/>
+<text x="330" y="122.5" font-size="13" fill="#c3c2b7">after them</text>
+<line x1="378.3" y1="144" x2="378.3" y2="440.0" stroke="#2c2c2a" stroke-width="1"/>
+<text x="378.3" y="460.0" font-size="12" fill="#9c9b94" text-anchor="middle" style="font-variant-numeric: tabular-nums">−0.4R</text>
+<line x1="455.0" y1="144" x2="455.0" y2="440.0" stroke="#2c2c2a" stroke-width="1"/>
+<text x="455.0" y="460.0" font-size="12" fill="#9c9b94" text-anchor="middle" style="font-variant-numeric: tabular-nums">−0.3R</text>
+<line x1="531.7" y1="144" x2="531.7" y2="440.0" stroke="#2c2c2a" stroke-width="1"/>
+<text x="531.7" y="460.0" font-size="12" fill="#9c9b94" text-anchor="middle" style="font-variant-numeric: tabular-nums">−0.2R</text>
+<line x1="608.3" y1="144" x2="608.3" y2="440.0" stroke="#2c2c2a" stroke-width="1"/>
+<text x="608.3" y="460.0" font-size="12" fill="#9c9b94" text-anchor="middle" style="font-variant-numeric: tabular-nums">−0.1R</text>
+<line x1="685.0" y1="144" x2="685.0" y2="440.0" stroke="#898781" stroke-width="1.25"/>
+<text x="685.0" y="460.0" font-size="12" fill="#9c9b94" text-anchor="middle" style="font-variant-numeric: tabular-nums">0</text>
+<line x1="761.7" y1="144" x2="761.7" y2="440.0" stroke="#2c2c2a" stroke-width="1"/>
+<text x="761.7" y="460.0" font-size="12" fill="#9c9b94" text-anchor="middle" style="font-variant-numeric: tabular-nums">+0.1R</text>
+<line x1="28" y1="191.0" x2="800" y2="191.0" stroke="#2c2c2a" stroke-width="1"/>
+<text x="28" y="172.0" font-size="14" font-weight="600" fill="#f0efec">All setups</text>
+<text x="314" y="171.5" font-size="12" fill="#9c9b94" text-anchor="end" style="font-variant-numeric: tabular-nums">37,401 trades</text>
+<line x1="705.0" y1="167.0" x2="553.8" y2="167.0" stroke="#4b4a46" stroke-width="2"/>
+<circle cx="705.0" cy="167.0" r="5.5" fill="#898781" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="553.8" cy="167.0" r="5.5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<text x="542.8" y="171.5" font-size="12" font-weight="600" fill="#f0efec" text-anchor="end" style="font-variant-numeric: tabular-nums">−0.17R</text>
+<text x="716.0" y="171.5" font-size="12" fill="#9c9b94" style="font-variant-numeric: tabular-nums">+0.03R</text>
+<text x="28" y="220.0" font-size="14" font-weight="400" fill="#c3c2b7">Squeeze break</text>
+<text x="314" y="219.5" font-size="12" fill="#9c9b94" text-anchor="end" style="font-variant-numeric: tabular-nums">1,885 trades</text>
+<line x1="735.1" y1="215.0" x2="625.4" y2="215.0" stroke="#4b4a46" stroke-width="2"/>
+<circle cx="735.1" cy="215.0" r="5.5" fill="#898781" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="625.4" cy="215.0" r="5.5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<text x="614.4" y="219.5" font-size="12" font-weight="500" fill="#c3c2b7" text-anchor="end" style="font-variant-numeric: tabular-nums">−0.08R</text>
+<text x="28" y="254.0" font-size="14" font-weight="400" fill="#c3c2b7">RSI reversal</text>
+<text x="314" y="253.5" font-size="12" fill="#9c9b94" text-anchor="end" style="font-variant-numeric: tabular-nums">1,278 trades</text>
+<line x1="663.8" y1="249.0" x2="602.9" y2="249.0" stroke="#4b4a46" stroke-width="2"/>
+<circle cx="663.8" cy="249.0" r="5.5" fill="#898781" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="602.9" cy="249.0" r="5.5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<text x="591.9" y="253.5" font-size="12" font-weight="500" fill="#c3c2b7" text-anchor="end" style="font-variant-numeric: tabular-nums">−0.11R</text>
+<text x="28" y="288.0" font-size="14" font-weight="400" fill="#c3c2b7">Volume spike</text>
+<text x="314" y="287.5" font-size="12" fill="#9c9b94" text-anchor="end" style="font-variant-numeric: tabular-nums">9,327 trades</text>
+<line x1="718.7" y1="283.0" x2="602.2" y2="283.0" stroke="#4b4a46" stroke-width="2"/>
+<circle cx="718.7" cy="283.0" r="5.5" fill="#898781" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="602.2" cy="283.0" r="5.5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<text x="591.2" y="287.5" font-size="12" font-weight="500" fill="#c3c2b7" text-anchor="end" style="font-variant-numeric: tabular-nums">−0.11R</text>
+<text x="28" y="322.0" font-size="14" font-weight="400" fill="#c3c2b7">Range breakout</text>
+<text x="314" y="321.5" font-size="12" fill="#9c9b94" text-anchor="end" style="font-variant-numeric: tabular-nums">7,987 trades</text>
+<line x1="704.8" y1="317.0" x2="564.1" y2="317.0" stroke="#4b4a46" stroke-width="2"/>
+<circle cx="704.8" cy="317.0" r="5.5" fill="#898781" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="564.1" cy="317.0" r="5.5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<text x="553.1" y="321.5" font-size="12" font-weight="500" fill="#c3c2b7" text-anchor="end" style="font-variant-numeric: tabular-nums">−0.16R</text>
+<text x="28" y="356.0" font-size="14" font-weight="400" fill="#c3c2b7">Trend pullback</text>
+<text x="314" y="355.5" font-size="12" fill="#9c9b94" text-anchor="end" style="font-variant-numeric: tabular-nums">9,353 trades</text>
+<line x1="709.9" y1="351.0" x2="553.7" y2="351.0" stroke="#4b4a46" stroke-width="2"/>
+<circle cx="709.9" cy="351.0" r="5.5" fill="#898781" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="553.7" cy="351.0" r="5.5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<text x="542.7" y="355.5" font-size="12" font-weight="500" fill="#c3c2b7" text-anchor="end" style="font-variant-numeric: tabular-nums">−0.17R</text>
+<text x="28" y="390.0" font-size="14" font-weight="400" fill="#c3c2b7">Opening range, New York</text>
+<text x="314" y="389.5" font-size="12" fill="#9c9b94" text-anchor="end" style="font-variant-numeric: tabular-nums">3,254 trades</text>
+<line x1="732.3" y1="385.0" x2="552.0" y2="385.0" stroke="#4b4a46" stroke-width="2"/>
+<circle cx="732.3" cy="385.0" r="5.5" fill="#898781" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="552.0" cy="385.0" r="5.5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<text x="541.0" y="389.5" font-size="12" font-weight="500" fill="#c3c2b7" text-anchor="end" style="font-variant-numeric: tabular-nums">−0.17R</text>
+<text x="28" y="424.0" font-size="14" font-weight="400" fill="#c3c2b7">Opening range, UTC day</text>
+<text x="314" y="423.5" font-size="12" fill="#9c9b94" text-anchor="end" style="font-variant-numeric: tabular-nums">4,317 trades</text>
+<line x1="643.9" y1="419.0" x2="386.1" y2="419.0" stroke="#4b4a46" stroke-width="2"/>
+<circle cx="643.9" cy="419.0" r="5.5" fill="#898781" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="386.1" cy="419.0" r="5.5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<text x="375.1" y="423.5" font-size="12" font-weight="500" fill="#c3c2b7" text-anchor="end" style="font-variant-numeric: tabular-nums">−0.39R</text>
+<text x="28" y="492" font-size="11.5" fill="#9c9b94">Every trade is in backtest/, with the reports. Past results say nothing certain about the future.</text>
+</g>
+</svg>
