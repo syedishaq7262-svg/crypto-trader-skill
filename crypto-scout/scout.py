@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""crypto-scout: what is worth a look today, ranked by evidence.
+"""crypto-scout: today's live setups that pass the cost rule, each with its record.
 
-    python3 scout.py                    scan, plan the strongest setups, test each on its own coin's last 30 days
+    python3 scout.py                    scan, plan the live setups, test each on its own coin's last 30 days
     python3 scout.py --top 6            test fewer (faster)
     python3 scout.py --symbols SOL,ETH  only these coins
     python3 scout.py pick 1             make board entry 1 the current plan, ready for /crypto-budget
 
-The board ranks by evidence: did this setup, on this coin, beat random entries at the
-same hours after fees, slippage and funding? When nothing did, it says so. Evidence
-is not a promise, and the board is not advice.
+The board leads each setup with its record in the pack's walk-forward backtests and orders them by it, the
+least bad first. Each one's last 30 days on its own coin, against random entries at the same hours, comes
+next as context: in the backtests a setup's recent record on a coin did not predict its next trade. No
+setup has shown an edge after costs, and the board says so. It is a list of what the rules found, not advice.
 """
 
 import argparse
@@ -31,9 +32,10 @@ T, O, H, L, C = cc.T, cc.O, cc.H, cc.L, cc.C
 TESTABLE = ("orb", "breakout", "trend", "reversal", "volume", "squeeze")
 NAMES = {"orb": "opening-range breakout", "breakout": "range breakout", "trend": "trend pullback",
          "reversal": "RSI reversal", "volume": "volume spike", "rs": "relative strength", "squeeze": "squeeze break"}
-TIERS = ("edge", "watch", "no_edge", "untested")
-TIER_TITLES = {"edge": "Has the evidence here", "watch": "Worth watching (positive, not proven)",
-               "no_edge": "No edge on this coin lately", "untested": "Cannot be tested (no fixed entry rule)"}
+GROUPS = ("listed", "gone", "untested")
+GROUP_TITLES = {"listed": "Within the cost rule, best long-run record first",
+                "gone": "Gone since it fired (the plan no longer holds)",
+                "untested": "No fixed entry rule to test"}
 FRESH_WATCH_MS = 15 * 60000
 SPARES = 10                    # extra candidates to try when the cost rule leaves some out
 STATUS_RANK = {"fresh": 0, "holding": 0, "spike": 0, "reclaimed": 1, "rejected": 1, "turning up": 1,
@@ -89,8 +91,19 @@ def get_regime(venue, cfg, a):
     return r
 
 
+def record_r(setup, side, session):
+    """The setup and side's average R after costs in the pack's backtests, over the trades within the cost rule
+    (the ones the pack lets you take); None when the backtests have no record of it."""
+    e = cc.track_entry(setup, side, session)
+    if not e or not e.get("n"):
+        return None
+    cr = e.get("cost_rule") or {}
+    return cr.get("avg_r") if cr.get("n") else e.get("avg_r")
+
+
 def candidates_of(watch, a):
     hits = watch.get("hits") or []
+    session = (watch.get("params") or {}).get("session") or watch.get("session")
     want = set(cc.clean_coin(s) for s in (a.symbols or "").split(",") if s.strip())
     setups = set((a.setups or ",".join(TESTABLE + ("rs",))).split(","))
     out, skipped = [], {"no side yet": [], "failed or ran": [], "past the entry window": []}
@@ -121,7 +134,11 @@ def candidates_of(watch, a):
             continue
         seen.add(key)
         out.append(h)
-    out.sort(key=lambda h: (h["setup"] not in TESTABLE, STATUS_RANK.get(h.get("status"), 3),
+    def record(h):
+        r = record_r(h["setup"], h["side"], session)
+        return -9.0 if r is None else r
+    # what can still be entered first, then the best long-run record, then the freshest and loudest
+    out.sort(key=lambda h: (h["setup"] not in TESTABLE, STATUS_RANK.get(h.get("status"), 3), -record(h),
                             (now - (h.get("at") or now)) // (15 * 60000), -(h.get("rvol") or 0), -(h.get("volume_24h") or 0)))
     return out, skipped
 
@@ -228,24 +245,39 @@ def flags_for(h, plan, tk, regime, ctx, cfg):
     return {"hard": hard, "soft": soft}
 
 
-def tier_of(data, plan, flags, passes_fdr):
-    hist, base, mc = data["history"], data["baseline"], data["mc"]
-    n = hist.get("n") or 0
+def group_of(c):
+    """listed: can be taken as planned; gone: the price has run past the plan since the setup fired; untested: no
+    fixed entry rule to re-run (relative strength). A coin's recent record no longer sorts anything: in the
+    pack's backtests it did not predict the next trade."""
+    hist = c["tm"]["history"]
     if hist.get("note") or not hist.get("setup"):
-        return "untested", -9.0
-    avg = hist.get("avg_r")
-    if n == 0 or avg is None:
-        return "no_edge", -5.0
-    edge = base["edge"] if base else avg
-    shrunk = edge * n / (n + 20.0)
-    below = hist.get("decided", 0) >= 5 and hist.get("share_hi") is not None and hist["share_hi"] < mc["breakeven"]
-    if avg <= 0 or below:
-        return "no_edge", shrunk - 2.0
-    if flags["hard"]:
-        return "watch", shrunk - 1.0
-    if n >= 10 and base is not None and passes_fdr and not flags["soft"]:
-        return "edge", shrunk
-    return "watch", shrunk
+        return "untested"
+    if c["flags"]["hard"]:
+        return "gone"
+    return "listed"
+
+
+def board_order(c):
+    p = c["plan"]["costs"]
+    r = c.get("record_r")
+    return (GROUPS.index(c["group"]), 9.0 if r is None else -r, p["entry_r"] + p["stop_exit_r"])   # no record: last
+
+
+def backtest_line(c):
+    """The setup and side's record in the pack's backtests: within the cost rule first, then all of them."""
+    e = cc.track_entry(c["setup"], c["side"], c.get("session"))
+    if not e or not e.get("n"):
+        if c["setup"] == "orb" and c.get("session") not in (None, "utc", "ny"):
+            return "backtest: none for the %s opening range (only the UTC day and New York were tested)" % (
+                cc.SESSION_NAMES.get(c["session"], c["session"]))
+        return None
+    words = "%s %ss" % (cc.TRACK_WORDS.get(cc.track_key(c["setup"], c.get("session")), c["setup"]), c["side"])
+    n = lambda x: "{:,}".format(x)
+    cr = e.get("cost_rule") or {}
+    if cr.get("n"):
+        return "backtest: %s within the cost rule %s a trade after costs over %s trades%s; all of them %s over %s%s" % (
+            words, cc.fmt_r(cr["avg_r"]), n(cr["n"]), cc.zero_note(cr), cc.fmt_r(e["avg_r"]), n(e["n"]), cc.zero_note(e))
+    return "backtest: %s %s a trade after costs over %s trades%s" % (words, cc.fmt_r(e["avg_r"]), n(e["n"]), cc.zero_note(e))
 
 
 def line_for(i, c):
@@ -255,13 +287,16 @@ def line_for(i, c):
     head = "%2d. %s %s, %s (%s %s)" % (i, c["coin"], c["side"], NAMES.get(c["setup"], c["setup"]), c["status"],
                                      cc.fmt_utc(c["at"], date=False) if c.get("at") else "")
     out = [head]
+    bt = backtest_line(c)
+    if bt:
+        out.append("     " + bt)
     n = h.get("n") or 0
     if h.get("note"):
-        ev = "no history: %s" % h["note"]
+        ev = "this coin: no history to re-run (%s)" % h["note"]
     elif n == 0:
-        ev = "never became a trade in 30 days"
+        ev = "this coin, last 30 days: never became a trade"
     else:
-        ev = "history %+.2fR a trade over %d trade%s" % (h["avg_r"], n, "" if n == 1 else "s")
+        ev = "this coin, last 30 days: %+.2fR a trade over %d trade%s" % (h["avg_r"], n, "" if n == 1 else "s")
         if h.get("decided"):
             ev += ", target first %d of %d" % (h["target"], h["decided"])
         if b:
@@ -271,14 +306,9 @@ def line_for(i, c):
             if c.get("passes_fdr"):
                 ev += " (still clear after testing %d setups at once)" % c.get("fdr_tests", 0)
     out.append("     " + ev)
-    parts = cc.track_parts(c["setup"], c["side"], c.get("session"))
-    if parts:
-        words = cc.TRACK_WORDS.get(cc.track_key(c["setup"], c.get("session")), c["setup"])
-        out.append("     backtest: %s %ss %s%s" % (words, c["side"], parts[0],
-                                                  ("; within the cost rule " + parts[1]) if parts[1] else ""))
-    out.append("     plan: entry %s, stop %s, target %s (%.1fR), out within %gh; replays: %s" % (
+    out.append("     plan: entry %s, stop %s, target %s (%.1fR), out within %gh; a stop-out costs %.2fR; replays: %s" % (
         P(p["entry"]), P(p["stop"]), P(p["target"]), p["target_r"], p["hold_hours"],
-        tm["verdict"]["mc"].split(":")[0].lower()))
+        p["costs"]["entry_r"] + p["costs"]["stop_exit_r"], tm["verdict"]["mc"].split(":")[0].lower()))
     fl = c["flags"]["hard"] + c["flags"]["soft"]
     if fl:
         out.append("     note: " + "; ".join(fl))
@@ -337,9 +367,9 @@ def board(a, cfg):
         c["passes_fdr"] = i in ok
     for c in results:
         c["fdr_tests"] = m_tests
-        c["tier"], c["score"] = tier_of(c["tm"], c["plan"], c["flags"], c.get("passes_fdr", False))
-    order = dict((t, i) for i, t in enumerate(TIERS))
-    results.sort(key=lambda c: (order[c["tier"]], -c["score"]))
+        c["group"] = group_of(c)
+        c["record_r"] = record_r(c["setup"], c["side"], c.get("session"))
+    results.sort(key=board_order)
     for i, c in enumerate(results, 1):
         c["rank"] = i
     data = {"version": 1, "as_of": cc.now_ms(), "venue": venue.name, "venue_label": venue.label,
@@ -349,7 +379,9 @@ def board(a, cfg):
             "entry_window_ms": float((watch.get("params") or {}).get("entry_hours") or 4) * cc.HOUR_MS,
             "fresher_session": list(fresher) if fresher else None, "cost_limit_r": cc.cost_limit(cfg),
             "backtest_source": cc.track_source() if cc.track_record() else None,
-            "backtest_cost_limit_r": (cc.track_record() or {}).get("cost_limit_r"),
+            "backtest_trades": ((cc.track_record() or {}).get("all") or {}).get("n"),
+            "backtest_clear": sorted(k for k, e in ((cc.track_record() or {}).get("setups") or {}).items()
+                                     if ((e.get("cost_rule") or e).get("lo") or -1) > 0),
             "params": {"top": a.top, "replays": a.replays, "seed": a.seed}}
     if not a.no_write:
         cc.write_json(cc.wpath("scout.json"), data)
@@ -359,7 +391,7 @@ def board(a, cfg):
     print_board(data)
     if a.stats:
         cc.out("Requests: " + cc.HTTP.summary())
-    return 0 if any(c["tier"] == "edge" for c in results) else 1
+    return 0 if any(c["group"] == "listed" for c in results) else 1
 
 
 def print_board(d):
@@ -390,13 +422,14 @@ def print_board(d):
                "blocks): %s." % (d.get("cost_limit_r") or 0, ", ".join(sk["stops too tight for the costs"][:8])))
     by = {}
     for c in d["candidates"]:
-        by.setdefault(c["tier"], []).append(c)
-    for t in TIERS:
-        rows = by.get(t, [])
+        by.setdefault(c["group"], []).append(c)
+    for g in GROUPS:
+        rows = by.get(g, [])
         if not rows:
             continue
+        title = GROUP_TITLES[g] if (g != "listed" or d.get("cost_limit_r")) else "Best long-run record first"
         cc.out("")
-        cc.out("%s (%d)" % (TIER_TITLES[t], len(rows)))
+        cc.out("%s (%d)" % (title, len(rows)))
         for c in rows:
             for ln in line_for(c["rank"], c):
                 cc.out(ln)
@@ -404,13 +437,19 @@ def print_board(d):
         cc.out("")
         cc.out("Could not test: " + "; ".join("%s %s (%s)" % (f["coin"], f["setup"], f["error"][:60]) for f in d["failures"]))
     cc.out("")
-    if not by.get("edge"):
-        cc.out("Nothing has the evidence today: no setup beat random entries on its own coin's last 30 days "
-               "clearly enough to survive testing them all at once, with nothing against it. Not trading is a position too.")
-    if d.get("backtest_source") and any(cc.track_parts(c["setup"], c["side"], c.get("session")) for c in d["candidates"]):
-        cc.out("Backtest lines: the walk-forward backtest on %s; within the cost rule, the trades whose stop-out cost "
-               "at most %gR." % (d["backtest_source"], d.get("backtest_cost_limit_r") or 0.2))
-    cc.out("Evidence, not a promise or advice. To take one further: scout.py pick N, then /crypto-budget.")
+    if not d.get("backtest_source"):
+        cc.out("Nothing on this board has shown an edge after costs. Not trading is a position too.")
+    elif d.get("backtest_clear"):
+        cc.out("In the pack's backtests (%s trades, %s) only %s made money after costs clearly enough to tell from luck, "
+               "and a setup's last 30 days on a coin did not predict its next trade." % (
+                   "{:,}".format(d.get("backtest_trades") or 0), d["backtest_source"],
+                   ", ".join(k.replace("|", " ") + "s" for k in d["backtest_clear"])))
+    else:
+        cc.out("Nothing on this board has shown an edge: in the pack's backtests (%s trades, %s) no setup made money "
+               "after costs clearly enough to tell from luck, and a setup's last 30 days on a coin did not predict its "
+               "next trade. Not trading is a position too." % ("{:,}".format(d.get("backtest_trades") or 0),
+                                                                d["backtest_source"]))
+    cc.out("A list of what the rules found, not advice. To take one further: scout.py pick N, then /crypto-budget.")
 
 
 def pick(a, cfg):
@@ -442,7 +481,7 @@ def pick(a, cfg):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(prog="scout.py", description="What is worth a look today, ranked by evidence.")
+    p = argparse.ArgumentParser(prog="scout.py", description="Today's live setups within the cost rule, each with its record.")
     p.add_argument("command", nargs="?", default="board", choices=["board", "pick"])
     p.add_argument("target", nargs="?", default=None, help="pick: the board entry number")
     p.add_argument("--top", type=int, default=10, help="test at most this many setups (default 10)")

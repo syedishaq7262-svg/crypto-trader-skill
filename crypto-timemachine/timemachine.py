@@ -674,7 +674,8 @@ def final_verdict(mc_label, hist, base, breakeven):
                 "(random entries: %+.2fR)." % (-avg, n, base["avg_r"]))
     if base["luck_p"] <= 0.10:
         return ("Verdict: the setup beat random entries here: %+.2fR a trade after costs over %d trades, against %+.2fR "
-                "for random entries; luck matches that %d%% of the time. A small sample: a hint, not proof."
+                "for random entries; luck matches that %d%% of the time. Not an edge: in the pack's backtests a "
+                "setup's recent record on a coin did not predict its next trade."
                 % (avg, n, base["avg_r"], round(base["luck_p"] * 100)))
     return ("Verdict: no clear edge. The setup made %+.2fR a trade after costs, but random entries at the same hours "
             "did as well %d%% of the time. %d trades is a small sample." % (avg, round(base["luck_p"] * 100), n))

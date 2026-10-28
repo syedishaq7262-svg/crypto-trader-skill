@@ -12,8 +12,13 @@ from _load import ROOT, Session
 # (what the README says, what a tool printed)
 FACTS = [
     ("41 setups live in the scan", "41 setups live in the scan"),
-    ("random\n   entries matched that only 0.2% of the time", "luck matches it 0.2% of the time"),
+    ("a stop-out would cost 0.50R", "BONK short range breakout 0.50R"),
+    ("A squeeze break on SHRTX comes first", " 1. SHRTX long, squeeze break"),
+    ("+0.06R a trade, which can't be told from zero",
+     "squeeze break longs within the cost rule +0.06R a trade after costs over 713 trades (can't be told from zero)"),
+    ("random entries matched only 0.2% of the time", "luck matches it 0.2% of the time"),
     ("the New York open, 1h45m ago, has a fresh one", "scout.py --session ny (the New York open, 1h45m ago)"),
+    ("nothing on it has shown an edge", "Nothing on this board has shown an edge"),
     ("21.002 to 21.255", "above 21.255 or below 21.002"),
     ("closes\n   at 21.404, above the range, on 4.8x volume", "closed at 21.404, above the range high 21.255, on 4.8x volume"),
     ("the market: 21.456", "Entry        21.456  now, at the market"),

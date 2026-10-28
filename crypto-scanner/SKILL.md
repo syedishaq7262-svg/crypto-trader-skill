@@ -151,7 +151,7 @@ BRKX  long    2.9210     2.9623  +1.41%  3.5x       0.07R  fresh
 BRKD  short   13.052     12.871  +1.39%  3.5x       0.10R  fresh
 BONK  short  0.02550    0.02543  +0.25%  1.8x  0.52R over  fresh
 
-Squeeze (volatility compression) | backtest of the break: longs +0.00R, shorts -0.16R a trade after costs
+Squeeze (volatility compression) | backtest of the break: longs 0.00R, shorts -0.16R a trade after costs
 coin   band width  rank (30d)  lower band  upper band
 FUNDX       1.66%          0%      30.044      30.547
   Broke out of a squeeze (first 1h close outside the bands):

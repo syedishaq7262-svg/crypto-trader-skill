@@ -8,10 +8,10 @@ USD-M futures, Bybit and Hyperliquid market data, seven crypto newsrooms'
 RSS feeds, a US macro calendar, Bybit's listing notices, the Fear & Greed
 index and Hyperliquid's public leaderboard.
 
-One scans every liquid perpetual for setups. Another ranks those setups by
-evidence: has this rule, on this coin, made money lately after fees,
-slippage and funding, more often than random entries at the same hours?
-Most days the honest answer is no, and it says so. Ask about any coin and
+One scans every liquid perpetual for setups. Another puts today's setups
+next to their records: how each rule did over 37,401 backtested trades and
+on its own coin lately, after fees, slippage and funding. None has shown an
+edge after costs, and it says so on every board. Ask about any coin and
 you get one clean card: trend, levels, liquidity, funding, open interest,
 the latest headline and the next CPI print. And the Time Machine replays a
 planned trade 10,000 times from the coin's own recent candles, re-runs the
@@ -70,7 +70,7 @@ computer.
 | command | job | what it does |
 | --- | --- | --- |
 | `/crypto-setup` | Setup and Doctor | Checks which exchanges answer from where you are, how fast, and whether your clock is right for signed orders. Writes your config. |
-| `/crypto-scout` | Scout | Ranks today's live setups by evidence: each one tested on its own coin's last 30 days against random entries, corrected for testing many at once. Often says "nothing today". |
+| `/crypto-scout` | Scout | Today's live setups within the cost rule, the least bad long-run record first, each with its backtest record and its coin's last 30 days against random entries. Says plainly that none has shown an edge. |
 | `/crypto-scanner` | Chart Scanner | Scans every liquid perpetual for seven setups: opening-range breakouts, range breakouts, squeezes, trend pullbacks, RSI reversals, volume spikes, strength against BTC. |
 | `/crypto-coin` | Coin Report | One clean card for any coin: price, trend, levels, liquidity, funding, open interest, news, the next macro release, live setups. |
 | `/crypto-derivs` | Derivatives Radar | Funding, open interest and positioning; crowded longs and shorts; funding gaps between exchanges; the market regime. |
@@ -107,12 +107,16 @@ An example, from the pack's offline test market: synthetic prices on
 Wednesday 21 October 2026, not real data. The tests replay this exact
 chain and check every number below.
 
-1. **`/crypto-scout`** at 15:15 UTC: 41 setups live in the scan, the
-   strongest 10 tested. Nothing has the evidence. The top of "worth
-   watching" is a VOLX volume spike whose three past trades all won; random
-   entries matched that only 0.2% of the time, but three trades is not a
-   record. It also says the UTC-day opening range is old news by now, and
-   that the New York open, 1h45m ago, has a fresh one.
+1. **`/crypto-scout`** at 15:15 UTC: 41 setups live in the scan, 10
+   tested. BONK's breakout short is left out because a stop-out would cost
+   0.50R. A squeeze break on SHRTX comes first, only because squeeze-break
+   longs have the least bad backtest record within the cost rule, +0.06R a
+   trade, which can't be told from zero. A VOLX volume spike won all three
+   of its recent trades, which random entries matched only 0.2% of the time,
+   but in the backtests a coin's recent record did not predict its next
+   trade. The board says the UTC-day opening range is old news by now and
+   the New York open, 1h45m ago, has a fresh one, and it ends by saying
+   nothing on it has shown an edge.
 2. **`/crypto-entry`** replays the New York open on ORBX bar by bar: the
    30-minute range is 21.002 to 21.255, and at 14:20 a 5-minute bar closes
    at 21.404, above the range, on 4.8x volume. Triggered.
@@ -138,7 +142,7 @@ chain and check every number below.
 8. **`/crypto-broker`** shows the ticket in plain words with a fingerprint:
    buy 26 ORBX, stop 21.128 on the exchange's mark price, target 22.112,
    about $9.64 to lose. Nothing happens unless you type yes for that exact
-   order. Here, the evidence says no, and that is the point of looking
+   order. Here, everything says no, and that is the point of looking
    before you risk a dollar.
 
 ## Backtest: 27,566 trades on real past prices
@@ -282,10 +286,10 @@ What the pack does with it:
   [`crypto-setup/track_record.json`](crypto-setup/track_record.json); your
   own run's `track_record.json`, copied into your `crypto/` folder, takes
   its place.
-- The Scout still ranks setups by their own coin's last 30 days; after the
-  second run, take that as context, not as evidence of an edge. It says
-  "nothing today" when nothing qualifies, the Risk Manager caps the damage,
-  and paper trading is the default.
+- **The Scout lists; it does not pick.** It orders today's setups by their
+  long-run record within the cost rule, shows each coin's last 30 days as
+  context, and says on every board that nothing has shown an edge. The Risk
+  Manager caps the damage, and paper trading is the default.
 
 Caveats: the coins are today's busiest, so coins that faded or were delisted
 are missing (the second run kept only 14); past trades were charged today's
@@ -315,7 +319,7 @@ caching).
 
 ```bash
 python3 crypto-setup/setup.py doctor                    # which exchanges answer from here
-python3 crypto-scout/scout.py                           # today's setups, ranked by evidence
+python3 crypto-scout/scout.py                           # today's setups within the cost rule, with their records
 python3 crypto-scanner/scan.py --session ny             # every setup, the New York open's range
 python3 crypto-coin/coin.py SOL                         # one coin, one card
 python3 crypto-derivs/derivs.py                         # funding, open interest, crowded trades

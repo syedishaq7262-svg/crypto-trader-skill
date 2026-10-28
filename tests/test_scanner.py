@@ -89,7 +89,7 @@ class PlantedSetups(unittest.TestCase):
         self.assertIn("%.2fR over" % bonk["stop_cost_r"], out)
         self.assertIn("Range breakout | backtest: longs -0.10R, shorts -0.23R a trade after costs", out)
         self.assertIn("| backtest: longs -0.21R, shorts -0.14R a trade after costs", out)       # the New York range
-        self.assertIn("Squeeze (volatility compression) | backtest of the break: longs +0.00R, shorts -0.16R", out)
+        self.assertIn("Squeeze (volatility compression) | backtest of the break: longs 0.00R, shorts -0.16R", out)
         self.assertIn("Relative strength vs BTC\n", out)                                      # no stop, no backtest
         self.assertIn("Over 0.2R (max_cost_r) crypto-risk blocks the trade.", out)
         self.assertIn("walk-forward backtest (Binance, 30 Apr to 27 Oct 2026)", out)

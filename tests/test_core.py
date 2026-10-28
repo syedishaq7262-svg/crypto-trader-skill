@@ -235,7 +235,9 @@ class TrackRecord(unittest.TestCase):
             self.assertEqual(len(tr["runs"]), 2)
             raw, within = cc.track_parts("breakout", "long")
             self.assertEqual(raw, "-0.10R a trade after costs over 4,453 trades")
-            self.assertEqual(within, "+0.00R over 2,992 (can't be told from zero)")
+            self.assertEqual(within, "0.00R over 2,992 (can't be told from zero)")             # +0.004R
+            self.assertEqual((cc.fmt_r(-0.001), cc.fmt_r(0.004), cc.fmt_r(-0.006), cc.fmt_r(0.25)),
+                             ("0.00R", "0.00R", "-0.01R", "+0.25R"))
             self.assertEqual(cc.track_parts("volume", "long")[0],
                              "-0.05R a trade after costs over 4,494 trades (can't be told from zero)")
             self.assertEqual(cc.track_words("breakout", "short"), "-0.23R a trade after costs over 3,534 trades; "

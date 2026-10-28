@@ -222,6 +222,7 @@ class HistoryAndEdge(unittest.TestCase):
         h = {"setup": "orb", "n": 30, "avg_r": 0.2, "ci90": (-0.1, 0.5), "decided": 28, "target": 12, "share_hi": 0.6}
         self.assertIn("no clear edge", TM.final_verdict("Close to break-even", h, base, 0.36))
         self.assertIn("beat random entries", TM.final_verdict("x", h, dict(base, luck_p=0.05), 0.36))
+        self.assertIn("Not an edge: in the pack's backtests", TM.final_verdict("x", h, dict(base, luck_p=0.05), 0.36))
         self.assertIn("too few past trades (6)", TM.final_verdict("Leans toward the stop", dict(h, n=6, decided=4), base, 0.36))
         self.assertIn("no setup to test", TM.final_verdict("Close to break-even", {"setup": None}, None, 0.36))
         self.assertIn("never became a trade", TM.final_verdict("x", {"setup": "orb", "n": 0}, None, 0.36))

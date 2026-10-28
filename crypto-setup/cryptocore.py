@@ -38,7 +38,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 USER_AGENT = "crypto-trader-skill/%s (+https://github.com/crypto-trader-skill)" % VERSION
 
 
@@ -2115,6 +2115,12 @@ def track_source(tr=None):
     return "%s, %d coins, %s" % (venue, tr.get("coins") or 0, span)
 
 
+def fmt_r(x):
+    """An average in R with its sign, and no sign when it rounds to zero: -0.001 prints as 0.00R, not -0.00R."""
+    s = "%+.2f" % x
+    return ("0.00" if s in ("+0.00", "-0.00") else s) + "R"
+
+
 def zero_note(e):
     """' (can't be told from zero)' when the 90% range of an average spans zero."""
     lo, hi = e.get("lo"), e.get("hi")
@@ -2128,14 +2134,14 @@ def track_parts(setup, side, session=None):
     e = track_entry(setup, side, session)
     if not e or not e.get("n"):
         return None
-    raw = "%+.2fR a trade after costs over %s trade%s%s" % (e["avg_r"], "{:,}".format(e["n"]), "" if e["n"] == 1 else "s",
-                                                             zero_note(e))
+    raw = "%s a trade after costs over %s trade%s%s" % (fmt_r(e["avg_r"]), "{:,}".format(e["n"]), "" if e["n"] == 1 else "s",
+                                                         zero_note(e))
     c = e.get("cost_rule")
     if not c:
         return raw, None
     if not c.get("n"):
         return raw, "none passed"
-    return raw, "%+.2fR over %s%s" % (c["avg_r"], "{:,}".format(c["n"]), zero_note(c))
+    return raw, "%s over %s%s" % (fmt_r(c["avg_r"]), "{:,}".format(c["n"]), zero_note(c))
 
 
 def track_words(setup, side, session=None):

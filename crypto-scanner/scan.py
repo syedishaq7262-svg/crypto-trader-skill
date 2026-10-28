@@ -533,7 +533,7 @@ def backtest_note(setup, session):
     for side in cc.SIDES:
         e = cc.track_entry(setup, side, session)
         if e and e.get("n"):
-            parts.append("%ss %+.2fR" % (side, e["avg_r"]))
+            parts.append("%ss %s" % (side, cc.fmt_r(e["avg_r"])))
     if not parts:
         return None
     return "backtest%s: %s a trade after costs" % (" of the break" if setup == "squeeze" else "", ", ".join(parts))

@@ -1,4 +1,5 @@
-"""crypto-scout: the board ranks by evidence, corrects for testing many setups at once, and picks one."""
+"""crypto-scout: the board lists what passes the cost rule, least bad record first, never calls anything an edge,
+and picks one."""
 
 import json
 import unittest
@@ -10,11 +11,6 @@ SC = load("crypto-scout", "scout")
 FAST = ["--venue", "binance", "--replays", "300"]
 
 
-def tm_data(n=12, avg=0.4, edge=0.3, decided=10, share_hi=0.8, breakeven=0.37, note=None):
-    return {"history": {"setup": "orb", "n": n, "avg_r": avg, "decided": decided, "share_hi": share_hi, "note": note},
-            "baseline": {"edge": edge} if edge is not None else None, "mc": {"breakeven": breakeven}}
-
-
 class Board(unittest.TestCase):
     def test_the_board(self):
         with Session() as s:
@@ -24,28 +20,32 @@ class Board(unittest.TestCase):
             self.assertIn("Regime: ", out)
             self.assertIn("tested on each coin's own last 30 days, after fees, slippage and funding", out)
             self.assertIn("coiled squeeze", out)                                 # FUNDX: no side until a band breaks
-            self.assertIn("Evidence, not a promise or advice.", out)
+            self.assertIn("A list of what the rules found, not advice.", out)
+            self.assertIn("Nothing on this board has shown an edge: in the pack's backtests (37,401 trades, Binance, "
+                          "30 Apr to 27 Oct 2026) no setup made money after costs clearly enough to tell from luck, and "
+                          "a setup's last 30 days on a coin did not predict its next trade.", out)
+            for word in ("evidence", "Worth watching", "Has the"):
+                self.assertNotIn(word, out)
             self.assertIn("Testing 1 of", err)                                   # progress goes to stderr
             d = cc.read_json(s.path("scout.json"))
             c = d["candidates"]
             self.assertTrue(0 < len(c) <= 6)
             self.assertEqual([x["rank"] for x in c], list(range(1, len(c) + 1)))
-            order = [SC.TIERS.index(x["tier"]) for x in c]
-            self.assertEqual(order, sorted(order))                               # tiers in order, best first
+            self.assertEqual(c, sorted(c, key=SC.board_order))                  # groups in order, best record first
             for x in c:
                 self.assertIn(x["side"], ("long", "short"))
+                self.assertIn(x["group"], SC.GROUPS)
                 self.assertEqual(x["fdr_tests"], len([y for y in c if y["tm"]["baseline"]]))
-                if x["tier"] == "edge":                                          # the bar for "has the evidence"
-                    self.assertGreaterEqual(x["tm"]["history"]["n"], 10)
-                    self.assertTrue(x["passes_fdr"])
-                    self.assertFalse(x["flags"]["hard"] + x["flags"]["soft"])
+                self.assertEqual(x["group"] == "gone", bool(x["flags"]["hard"]))
                 p = x["plan"]
                 sg = cc.side_sign(p["side"])
                 self.assertGreater(sg * (p["target"] - p["entry"]), 0)
                 self.assertGreater(sg * (p["entry"] - p["stop"]), 0)
-            self.assertEqual(code, 0 if any(x["tier"] == "edge" for x in c) else 1)
-            if not any(x["tier"] == "edge" for x in c):
-                self.assertIn("Nothing has the evidence today", out)
+                lines = SC.line_for(x["rank"], x)
+                self.assertTrue(lines[1].startswith("     backtest: "), lines)      # the record leads
+                self.assertTrue(lines[2].startswith("     this coin, last 30 days: "), lines)
+                self.assertIn("a stop-out costs %.2fR" % (p["costs"]["entry_r"] + p["costs"]["stop_exit_r"]), lines[3])
+            self.assertEqual(code, 0 if any(x["group"] == "listed" for x in c) else 1)
             self.assertNotIn("FUNDX", [x["coin"] for x in c if x["setup"] == "squeeze"])
             # the UTC-day opening range closed its 4h entry window at 04:00: those breakouts are old news
             self.assertFalse([x for x in c if x["setup"] == "orb"])
@@ -64,15 +64,17 @@ class Board(unittest.TestCase):
             for x in d["candidates"]:
                 c = x["plan"]["costs"]
                 self.assertLessEqual(round(c["entry_r"] + c["stop_exit_r"], 2), 0.2)
-                self.assertIn("backtest: ", "\n".join(SC.line_for(x["rank"], x)))
-            self.assertIn("     backtest: range breakout shorts -0.23R a trade after costs over 3,534 trades; within the cost "
-                          "rule -0.18R over 2,127\n", out)
-            self.assertIn("Backtest lines: the walk-forward backtest on Binance, 30 Apr to 27 Oct 2026; within the cost rule, "
-                          "the trades whose stop-out cost at most 0.2R.", out)
+            self.assertIn("Within the cost rule, best long-run record first (10)", out)
+            self.assertIn("     backtest: range breakout shorts within the cost rule -0.18R a trade after costs over 2,127 "
+                          "trades; all of them -0.23R over 3,534\n", out)
+            self.assertEqual([x["coin"] for x in d["candidates"]][:2], ["SHRTX", "VOLX"])   # squeeze, then volume longs
+            records = [x["record_r"] for x in d["candidates"]]
+            self.assertEqual(records, sorted(records, reverse=True))
         with Session(config={"max_cost_r": 0}) as s:                # the rule off: tested, with a note
             code, out, err = s.run(*SCOUT, FAST)
             self.assertNotIn("too tight for the costs", out)
             self.assertIn("costs 0.50R at a stop-out", out)
+            self.assertIn("Best long-run record first (", out)
 
     def test_a_fresh_session_keeps_its_breakouts(self):
         with Session() as s:
@@ -118,7 +120,7 @@ class Board(unittest.TestCase):
             self.assertIn("no scout board yet", err)
 
 
-class Evidence(unittest.TestCase):
+class Rules(unittest.TestCase):
     def test_benjamini_hochberg(self):
         self.assertEqual(SC.bh_passes([]), set())
         self.assertEqual(SC.bh_passes([0.001, 0.02, 0.03, 0.5]), {0, 1, 2})
@@ -126,20 +128,23 @@ class Evidence(unittest.TestCase):
         self.assertEqual(SC.bh_passes([0.06, 0.5]), set())
         self.assertEqual(SC.bh_passes([0.04] + [0.9] * 9), set())                # 0.04 is not rare among ten tests
 
-    def test_tiers(self):
-        none = {"hard": [], "soft": []}
-        self.assertEqual(SC.tier_of(tm_data(), {}, none, True)[0], "edge")
-        self.assertEqual(SC.tier_of(tm_data(), {}, none, False)[0], "watch")      # did not survive the correction
-        self.assertEqual(SC.tier_of(tm_data(n=6), {}, none, True)[0], "watch")    # too few trades
-        self.assertEqual(SC.tier_of(tm_data(), {}, {"hard": [], "soft": ["joins crowded longs"]}, True)[0], "watch")
-        self.assertEqual(SC.tier_of(tm_data(), {}, {"hard": ["the price is past the stop"], "soft": []}, True)[0], "watch")
-        self.assertEqual(SC.tier_of(tm_data(avg=-0.1), {}, none, True)[0], "no_edge")
-        self.assertEqual(SC.tier_of(tm_data(share_hi=0.30), {}, none, True)[0], "no_edge")   # even the top is under break-even
-        self.assertEqual(SC.tier_of(tm_data(n=0, avg=None), {}, none, False)[0], "no_edge")
-        self.assertEqual(SC.tier_of(tm_data(note="no fixed rule"), {}, none, False)[0], "untested")
-        a = SC.tier_of(tm_data(n=12, edge=0.3), {}, none, True)[1]
-        b = SC.tier_of(tm_data(n=40, edge=0.3), {}, none, True)[1]
-        self.assertLess(a, b)                                                    # a longer record ranks higher
+    def test_groups_and_order(self):
+        def cand(setup="breakout", side="long", hard=(), note=None, cost=0.1, record=None):
+            hist = {"setup": None if note else setup, "n": 12, "note": note}
+            return {"setup": setup, "side": side, "session": None, "flags": {"hard": list(hard), "soft": []},
+                    "tm": {"history": hist}, "plan": {"costs": {"entry_r": cost / 2, "stop_exit_r": cost / 2}},
+                    "record_r": record}
+        self.assertEqual(SC.group_of(cand()), "listed")
+        self.assertEqual(SC.group_of(cand(hard=["the price is past the stop"])), "gone")
+        self.assertEqual(SC.group_of(cand(setup="rs", note="no fixed entry rule")), "untested")
+        board = [cand(record=-0.2), cand(record=0.05, cost=0.15), cand(record=0.05, cost=0.05), cand(record=None)]
+        for c in board:
+            c["group"] = SC.group_of(c)
+        got = sorted(board, key=SC.board_order)
+        self.assertEqual([(c["record_r"], round(c["plan"]["costs"]["entry_r"] * 2, 2)) for c in got],
+                         [(0.05, 0.05), (0.05, 0.15), (-0.2, 0.1), (None, 0.1)])      # best record, cheaper stop-out
+        self.assertEqual(SC.record_r("breakout", "long", None), 0.004)             # within the cost rule
+        self.assertIsNone(SC.record_r("orb", "long", "tokyo"))
 
 
 if __name__ == "__main__":

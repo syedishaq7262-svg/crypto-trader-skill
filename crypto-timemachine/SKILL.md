@@ -108,7 +108,9 @@ in 5-minute bars), `--window 2` (time-of-day match, +/- bars),
    - under 10 past trades: *too few to judge the setup itself*;
    - the setup lost money after costs: *no edge*;
    - it made money and luck matches it 10% of the time or less: *beat random
-     entries; a hint, not proof*;
+     entries here*, said together with *not an edge*: in the pack's
+     backtests a coin's recent record with a setup did not predict its next
+     trade;
    - it made money but luck matches it more often: *no clear edge*.
 
    The replays get their own line: *close to break-even*, *leans toward* or
