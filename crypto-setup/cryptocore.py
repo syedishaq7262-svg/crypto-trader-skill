@@ -38,7 +38,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 USER_AGENT = "crypto-trader-skill/%s (+https://github.com/crypto-trader-skill)" % VERSION
 
 

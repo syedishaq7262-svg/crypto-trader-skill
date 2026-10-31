@@ -1,8 +1,8 @@
 # The Crypto Trader skill
 
-**16 Claude skills for crypto day trading. We backtested their setups on
+**17 Claude skills for crypto day trading. We backtested their setups on
 37,401 trades, published every trade, and none of the setups showed an edge
-after costs.**
+after costs. Now test your own ideas the same way.**
 
 [![tests](https://github.com/syedishaq7262-svg/crypto-trader-skill/actions/workflows/tests.yml/badge.svg)](https://github.com/syedishaq7262-svg/crypto-trader-skill/actions/workflows/tests.yml)
 [![release](https://img.shields.io/github/v/release/syedishaq7262-svg/crypto-trader-skill?color=2a78d6)](https://github.com/syedishaq7262-svg/crypto-trader-skill/releases)
@@ -30,9 +30,9 @@ Install in Claude Code, two lines:
 /plugin install crypto-trader-skill@crypto-trader-skill
 ```
 
-Then ask: "what should I trade today?", "tell me about SOL", "plan a long on
-ETH". Paper trading is the default, and no order goes through until you type
-yes for that exact order.
+Then ask: "what should I trade today?", "tell me about SOL", "would buying
+RSI dips in an uptrend have worked?". Paper trading is the default, and no
+order goes through until you type yes for that exact order.
 
 ## What it does
 
@@ -44,7 +44,10 @@ any coin and you get one clean card: trend, levels, liquidity, funding, open
 interest, the latest headline and the next CPI print. The Time Machine
 replays a planned trade 10,000 times from the coin's own recent candles,
 re-runs the same setup on its last 30 days, and tests it against random
-entries before you risk a dollar. The rest plan the exit before the entry,
+entries before you risk a dollar. The Idea Lab takes an idea of your own,
+in plain words, turns it into a rule and tests it the same honest way: on
+real past prices, after every cost, against random entries, with a count of
+how many ideas you have tried. The rest plan the exit before the entry,
 size the position to your max loss, check where liquidation sits, run every
 order past your limits, and keep your journal.
 
@@ -97,7 +100,7 @@ answers. Cloud sandboxes often allow only a few websites, so run the pack
 where Claude can reach the exchanges, such as Claude Code on your own
 computer.
 
-## The sixteen
+## The seventeen
 
 | command | job | what it does |
 | --- | --- | --- |
@@ -111,6 +114,7 @@ computer.
 | `/crypto-entry` | Entry Timer | Watches a setup bar by bar and says the moment it triggers. |
 | `/crypto-exit` | Exit Planner | Sets the stop, the target and the time limit before the entry, with fees, slippage and funding counted in R. |
 | `/crypto-timemachine` | Time Machine | Replays the trade 10,000 times from the coin's own candles, re-runs the setup's own history, and tests it against random entries. |
+| `/crypto-idealab` | Idea Lab | Tests an idea of your own on the past: Claude turns your words into a rule, the lab replays it on real candles after fees, slippage and funding, against random entries at the same hours, and counts how many ideas you have tried. |
 | `/crypto-budget` | Budget Manager | Sizes the position to your max loss per trade, your margin cap and your leverage cap. |
 | `/crypto-liquidation` | Liquidation Guard | Where liquidation sits, how often a move that big came within a day, and the leverage that keeps it far behind your stop. |
 | `/crypto-risk` | Risk Manager | Checks every order against your limits: max loss, daily loss, trades a day, open positions, reward to risk, what fees and slippage take from a stop-out, a cooldown after losses. |
@@ -129,11 +133,13 @@ scout, or scanner -> coin                                     (what is worth a l
 entry -> exit -> timemachine -> budget -> liquidation -> risk -> broker   (one trade)
 alerts: stop, target, time limit, liquidation, macro releases (while it is open)
 news / derivs / whales                                        (context, any time)
+idealab                                                       (test an idea of your own, any time)
 journal                                                       (afterwards)
 ```
 
 Or just ask: "what should I trade today?", "tell me about SOL", "plan a long
-on ETH", "is BTC crowded?", "how am I doing?".
+on ETH", "is BTC crowded?", "test my idea: short when funding is high", "how
+am I doing?".
 
 An example, from the pack's offline test market: synthetic prices on
 Wednesday 21 October 2026, not real data. The tests replay this exact
@@ -359,6 +365,8 @@ python3 crypto-whales/whales.py coin BTC                # who among the top trad
 python3 crypto-entry/entry.py watch ORBX --session ny   # bar by bar until it triggers
 python3 crypto-exit/exit.py plan ORBX                   # -> crypto/plan.json
 python3 crypto-timemachine/timemachine.py run           # 10,000 replays, the history, the edge test
+python3 crypto-idealab/lab.py test --when "rsi(14) < 30 and close > ema(200)" --side long
+                                                        # your own idea on the past, after costs
 python3 crypto-budget/size.py                           # -> crypto/orders.json
 python3 crypto-liquidation/liq.py check                 # liquidation against the stop
 python3 crypto-risk/check.py                            # PASS / BLOCK per order
@@ -494,6 +502,7 @@ crypto-whales/       SKILL.md, whales.py
 crypto-entry/        SKILL.md, entry.py
 crypto-exit/         SKILL.md, exit.py
 crypto-timemachine/  SKILL.md, timemachine.py
+crypto-idealab/      SKILL.md, lab.py
 crypto-budget/       SKILL.md, size.py
 crypto-liquidation/  SKILL.md, liq.py
 crypto-risk/         SKILL.md, check.py

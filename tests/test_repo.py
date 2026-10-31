@@ -73,7 +73,7 @@ class Repo(unittest.TestCase):
     def test_the_readme_names_every_skill(self):
         with open(os.path.join(ROOT, "README.md"), encoding="utf-8") as fh:
             readme = fh.read()
-        words = {16: "sixteen"}
+        words = {16: "sixteen", 17: "seventeen", 18: "eighteen"}
         self.assertIn("%d Claude skills" % len(SKILLS), readme)
         self.assertIn("## The %s" % words.get(len(SKILLS), str(len(SKILLS))), readme)
         for s in SKILLS:

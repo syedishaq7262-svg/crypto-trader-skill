@@ -72,7 +72,7 @@ SKILLS = {
     "budget": ("crypto-budget", "size"), "liq": ("crypto-liquidation", "liq"), "risk": ("crypto-risk", "check"),
     "broker": ("crypto-broker", "broker"), "alerts": ("crypto-alerts", "alerts"), "entry": ("crypto-entry", "entry"),
     "news": ("crypto-news", "news"), "whales": ("crypto-whales", "whales"), "scout": ("crypto-scout", "scout"),
-    "journal": ("crypto-journal", "journal"),
+    "journal": ("crypto-journal", "journal"), "lab": ("crypto-idealab", "lab"),
 }
 _MODS = {}
 
@@ -250,6 +250,8 @@ def checks_for(venue, quick):
         Check("liquidation at ETH 5x short", "liq", ["at", "ETH", "--side", "short", "--leverage", "5"] + v),
         Check("risk check", "risk", [], ok_codes=(0, 1), expect=ex_risk),
         Check("broker ticket", "broker", ["ticket"], ok_codes=(0, 1), expect=ex_text("Ticket")),
+        Check("idea lab EMA cross", "lab", ["test", "--when", "crosses_above(ema(9), ema(21))", "--side", "long",
+                                            "--coins", "top:3", "--days", "20"] + v, expect=ex_text("Verdict:")),
     ]
     return cs
 
