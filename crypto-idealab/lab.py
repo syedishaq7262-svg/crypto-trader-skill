@@ -1273,8 +1273,9 @@ def report_lines(d, tried=None):
     c = d["costs"]
     slip = ("%.1f bps a side from %s" % (c["slippage_median"] * 1e4, c["slippage_source"])) if c.get("slippage_source") else (
         "median %.1f bps a side, measured from each coin's order book today" % ((c["slippage_median"] or 0) * 1e4))
-    out.append("Costs: fees %s a side (%s at the target), slippage %s, and the funding charged while each trade was open."
-               % (_fee(c["taker"]), _fee(c["maker"]), slip))
+    at_target = (" (%s at the target)" % _fee(c["maker"])) if parse_target(idea["target"]) else ""
+    out.append("Costs: fees %s a side%s, slippage %s, and the funding charged while each trade was open."
+               % (_fee(c["taker"]), at_target, slip))
     for p in d["problems"]:
         out.append("  Left out: %s" % p)
     short = [x["coin"] for x in d["per_coin"] if x["short_history"]]

@@ -1,6 +1,6 @@
 # The Crypto Trader skill
 
-**17 Claude skills for crypto day trading. We backtested their setups on
+**18 Claude skills for crypto day trading. We backtested their setups on
 37,401 trades, published every trade, and none of the setups showed an edge
 after costs. Now test your own ideas the same way.**
 
@@ -30,13 +30,17 @@ Install in Claude Code, two lines:
 /plugin install crypto-trader-skill@crypto-trader-skill
 ```
 
-Then ask: "what should I trade today?", "tell me about SOL", "would buying
-RSI dips in an uptrend have worked?". Paper trading is the default, and no
-order goes through until you type yes for that exact order.
+Then ask: "what's moving today?", "tell me about SOL", "would buying RSI
+dips in an uptrend have worked?". Paper trading is the default, and no order
+goes through until you type yes for that exact order.
 
 ## What it does
 
-One skill scans every liquid perpetual for seven setups. Another puts
+The Market Pulse shows what is moving today and what is behind it: the
+biggest moves with their volume against a usual day, open interest, funding
+and the headlines naming them, crowded trades and new listings, and the
+backtest's record for chasing them. One skill scans every liquid perpetual
+for seven setups. Another puts
 today's setups next to their records: how each rule did over the 37,401
 backtested trades and on its own coin lately, after fees, slippage and
 funding, and it says on every board that none has shown an edge. Ask about
@@ -100,11 +104,12 @@ answers. Cloud sandboxes often allow only a few websites, so run the pack
 where Claude can reach the exchanges, such as Claude Code on your own
 computer.
 
-## The seventeen
+## The eighteen
 
 | command | job | what it does |
 | --- | --- | --- |
 | `/crypto-setup` | Setup and Doctor | Checks which exchanges answer from where you are, how fast, and whether your clock is right for signed orders. Writes your config. |
+| `/crypto-pulse` | Market Pulse | What is moving today and what is behind it: the biggest moves with their volume against a usual day, open interest, funding and the headlines naming them, crowded trades, new listings and notices, and the backtest's record for chasing moves. |
 | `/crypto-scout` | Scout | Today's live setups within the cost rule, the least bad long-run record first, each with its backtest record and its coin's last 30 days against random entries. Says plainly that none has shown an edge. |
 | `/crypto-scanner` | Chart Scanner | Scans every liquid perpetual for seven setups: opening-range breakouts, range breakouts, squeezes, trend pullbacks, RSI reversals, volume spikes, strength against BTC. |
 | `/crypto-coin` | Coin Report | One clean card for any coin: price, trend, levels, liquidity, funding, open interest, news, the next macro release, live setups. |
@@ -129,6 +134,7 @@ what the last one wrote:
 
 ```
 setup (once)
+pulse                                                         (what is moving today)
 scout, or scanner -> coin                                     (what is worth a look)
 entry -> exit -> timemachine -> budget -> liquidation -> risk -> broker   (one trade)
 alerts: stop, target, time limit, liquidation, macro releases (while it is open)
@@ -137,9 +143,9 @@ idealab                                                       (test an idea of y
 journal                                                       (afterwards)
 ```
 
-Or just ask: "what should I trade today?", "tell me about SOL", "plan a long
-on ETH", "is BTC crowded?", "test my idea: short when funding is high", "how
-am I doing?".
+Or just ask: "what's hot today?", "what should I trade today?", "tell me
+about SOL", "plan a long on ETH", "is BTC crowded?", "test my idea: short
+when funding is high", "how am I doing?".
 
 An example, from the pack's offline test market: synthetic prices on
 Wednesday 21 October 2026, not real data. The tests replay this exact
@@ -356,6 +362,7 @@ caching).
 
 ```bash
 python3 crypto-setup/setup.py doctor                    # which exchanges answer from here
+python3 crypto-pulse/pulse.py                           # what is moving today, and what is behind it
 python3 crypto-scout/scout.py                           # today's setups within the cost rule, with their records
 python3 crypto-scanner/scan.py --session ny             # every setup, the New York open's range
 python3 crypto-coin/coin.py SOL                         # one coin, one card
@@ -493,6 +500,7 @@ advice.
 
 ```
 crypto-setup/        SKILL.md, setup.py, cryptocore.py (shared by every skill), config.example.json, track_record.json
+crypto-pulse/        SKILL.md, pulse.py
 crypto-scout/        SKILL.md, scout.py
 crypto-scanner/      SKILL.md, scan.py
 crypto-coin/         SKILL.md, coin.py
